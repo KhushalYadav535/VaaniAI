@@ -76,13 +76,18 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-0.5 p-3 overflow-y-auto">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href
-            const Icon = item.icon
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
+          {(() => {
+            let currentNav = [...navigation];
+            if (user?.role === 'super_admin') {
+              currentNav.unshift({ name: 'Super Admin Dashboard', href: '/super-admin', icon: LayoutDashboard });
+            }
+            return currentNav.map((item) => {
+              const isActive = pathname === item.href
+              const Icon = item.icon
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
                 onClick={() => setIsOpen(false)}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm font-light',
@@ -94,8 +99,9 @@ export function Sidebar() {
                 <Icon size={18} className={isActive ? 'text-purple-600 dark:text-purple-400' : ''} />
                 <span>{item.name}</span>
               </Link>
-            )
-          })}
+              )
+            })
+          })()}
         </nav>
 
         {/* User section */}

@@ -32,7 +32,11 @@ export default function LoginPage() {
       const data: any = await authApi.login(email, password);
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
-      router.push('/dashboard');
+      if (data.user.role === 'super_admin') {
+        router.push('/super-admin');
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err: any) {
       setError(err.message || 'Invalid email or password');
     } finally {

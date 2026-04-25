@@ -292,3 +292,15 @@ export const webhooksLogsApi = {
   getAllLogs: () => apiRequest('/webhooks/logs'),
   getLogsByWebhook: (id: string) => apiRequest(`/webhooks/${id}/logs`),
 };
+
+// ─── Super Admin ─────────────────────────────────────────────────────────────
+
+export const superAdminApi = {
+  getStats: () => apiRequest('/super-admin/stats'),
+  getUsers: () => apiRequest('/super-admin/users'),
+  updateSubscription: (id: string, plan: string, status: string) =>
+    apiRequest(`/super-admin/users/${id}/subscription`, {
+      method: 'PUT',
+      body: JSON.stringify({ plan, status }),
+    }),
+};
