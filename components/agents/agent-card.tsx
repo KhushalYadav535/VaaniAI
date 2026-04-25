@@ -32,27 +32,30 @@ export function AgentCard({ agent, onDelete }: AgentCardProps) {
 
   return (
     <>
-      <Card className="bg-slate-900/50 border-slate-800 p-6 hover:border-slate-700 transition-colors">
+      <Card className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 p-6 hover:shadow-lg dark:hover:border-slate-700 transition-all duration-300">
         <div className="space-y-4">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-slate-50">{agent.name}</h3>
-              <p className="text-sm text-slate-500 mt-1 line-clamp-2">{agent.systemPrompt}</p>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50">{agent.name}</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{agent.systemPrompt}</p>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-50">
+                <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-50">
                   <MoreVertical size={18} />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-slate-900 border-slate-800">
-                <DropdownMenuItem className="text-slate-50 focus:bg-slate-800">
+              <DropdownMenuContent align="end" className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <DropdownMenuItem
+                  className="text-slate-700 dark:text-slate-50 focus:bg-slate-100 dark:focus:bg-slate-800"
+                  onClick={() => window.location.href = `/agents/${agent._id}/edit`}
+                >
                   <Edit2 size={16} className="mr-2" />
                   Edit
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => setShowDeleteDialog(true)}
-                  className="text-red-500 focus:bg-red-500/10"
+                  className="text-red-600 dark:text-red-500 focus:bg-red-50 dark:focus:bg-red-500/10"
                 >
                   <Trash2 size={16} className="mr-2" />
                   Delete
@@ -63,34 +66,38 @@ export function AgentCard({ agent, onDelete }: AgentCardProps) {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Status</span>
-              <Badge className={agent.status === 'active' ? 'bg-green-500/10 text-green-500 border-0' : 'bg-slate-800 text-slate-400 border-0'}>
+              <span className="text-slate-500 dark:text-slate-400 font-light">Status</span>
+              <Badge className={agent.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-500 border-0 font-normal' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-0 font-normal'}>
                 {agent.status}
               </Badge>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">LLM</span>
-              <span className="text-slate-200 capitalize">{agent.llm.provider} - {agent.llm.model.split('/').pop()}</span>
+              <span className="text-slate-500 dark:text-slate-400 font-light">LLM</span>
+              <span className="text-slate-700 dark:text-slate-200 capitalize font-medium">{agent.llm.provider} - {agent.llm.model.split('/').pop()}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Voice</span>
-              <span className="text-slate-200 capitalize">{agent.voice.provider.replace('-', ' ')}</span>
+              <span className="text-slate-500 dark:text-slate-400 font-light">Voice</span>
+              <span className="text-slate-700 dark:text-slate-200 capitalize font-medium">{agent.voice.provider.replace('-', ' ')}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Total Calls</span>
-              <span className="text-slate-200">{agent.callsCount}</span>
+              <span className="text-slate-500 dark:text-slate-400 font-light">Total Calls</span>
+              <span className="text-slate-700 dark:text-slate-200 font-medium">{agent.callsCount}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Minutes Used</span>
-              <span className="text-slate-200">{agent.totalMinutes.toLocaleString()}</span>
+              <span className="text-slate-500 dark:text-slate-400 font-light">Minutes Used</span>
+              <span className="text-slate-700 dark:text-slate-200 font-medium">{agent.totalMinutes.toLocaleString()}</span>
             </div>
           </div>
 
           <div className="pt-4 flex gap-2">
-            <Button size="sm" className="flex-1 bg-purple-600 hover:bg-purple-700 text-white">
+            <Button
+              size="sm"
+              className="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-md"
+              onClick={() => window.location.href = `/agents/${agent._id}/edit`}
+            >
               Edit
             </Button>
-            <Button size="sm" variant="outline" className="flex-1 border-slate-700 text-slate-50 hover:bg-slate-800">
+            <Button size="sm" onClick={() => window.location.href=`/test-agent?agentId=${agent._id}`} variant="outline" className="flex-1 border-slate-200 bg-white/50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-transparent dark:text-slate-50 dark:hover:bg-slate-800">
               Test
             </Button>
           </div>
@@ -110,7 +117,7 @@ export function AgentCard({ agent, onDelete }: AgentCardProps) {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => onDelete(agent.id)}
+              onClick={() => onDelete(agent._id)}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               Delete

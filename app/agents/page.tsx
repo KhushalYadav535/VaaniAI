@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AgentCard } from '@/components/agents/agent-card'
 import { CreateAgentDrawer } from '@/components/agents/create-agent-drawer'
 import { mockAgents } from '@/lib/mock-data'
@@ -10,11 +10,29 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export default function AgentsPage() {
-  const [agents, setAgents] = useState(mockAgents)
+  const [agents, setAgents] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState('all')
   const [sortBy, setSortBy] = useState('name')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchAgents()
+  }, [])
+
+  const fetchAgents = async () => {
+    try {
+      // @ts-ignore
+      const { agentsApi } = await import('@/lib/api')
+      const res: any = await agentsApi.getAll()
+      setAgents(res.agents || [])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredAgents = agents.filter(agent => {
     const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -22,32 +40,51 @@ export default function AgentsPage() {
     return matchesSearch && matchesFilter
   }).sort((a, b) => {
     if (sortBy === 'name') return a.name.localeCompare(b.name)
-    if (sortBy === 'calls') return b.callsCount - a.callsCount
-    if (sortBy === 'created') return b.createdAt.getTime() - a.createdAt.getTime()
+    if (sortBy === 'calls') return (b.callsCount || 0) - (a.callsCount || 0)
+    if (sortBy === 'created') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     return 0
   })
 
-  const handleCreateAgent = (newAgent: any) => {
-    const agent = {
-      ...newAgent,
-      id: String(agents.length + 1),
-      createdAt: new Date(),
-      callsCount: 0,
-      totalMinutes: 0,
+  const handleCreateAgent = async (newAgent: any) => {
+    try {
+      let tools = []
+      if (newAgent.toolsJson) {
+        try {
+          tools = JSON.parse(newAgent.toolsJson)
+        } catch(e) {
+           alert("Invalid Tools JSON")
+           return
+        }
+      }
+      // @ts-ignore
+      const { agentsApi } = await import('@/lib/api')
+      await agentsApi.create({
+        ...newAgent,
+        tools
+      })
+      fetchAgents()
+      setIsCreateOpen(false)
+    } catch (e) {
+      alert("Failed to create agent")
     }
-    setAgents([...agents, agent])
-    setIsCreateOpen(false)
   }
 
-  const handleDeleteAgent = (id: string) => {
-    setAgents(agents.filter(a => a.id !== id))
+  const handleDeleteAgent = async (id: string) => {
+    try {
+      // @ts-ignore
+      const { agentsApi } = await import('@/lib/api')
+      await agentsApi.delete(id)
+      fetchAgents()
+    } catch (e) {
+      alert("Failed to delete")
+    }
   }
 
   const stats = {
     total: agents.length,
     active: agents.filter(a => a.status === 'active').length,
-    totalCalls: agents.reduce((sum, a) => sum + a.callsCount, 0),
-    totalMinutes: agents.reduce((sum, a) => sum + a.totalMinutes, 0),
+    totalCalls: agents.reduce((sum, a) => sum + (a.callsCount || 0), 0),
+    totalMinutes: agents.reduce((sum, a) => sum + (a.totalMinutes || 0), 0),
   }
 
   return (
@@ -81,7 +118,7 @@ export default function AgentsPage() {
               </div>
               
               <Button
-                onClick={() => setIsCreateOpen(true)}
+                onClick={() => window.location.href='/agents/new'}
                 className="bg-gradient-to-r from-violet-600 via-purple-600 to-pink-600 hover:from-violet-700 hover:via-purple-700 hover:to-pink-700 text-white font-light px-6 shadow-lg shadow-purple-500/25 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/30 hover:scale-105"
               >
                 <Plus className="w-5 h-5 mr-2" />
@@ -187,7 +224,7 @@ export default function AgentsPage() {
         {filteredAgents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredAgents.map((agent) => (
-              <div key={agent.id} className="relative group">
+              <div key={agent._id} className="relative group">
                 <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200/50 dark:border-slate-800/50 p-6 hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-300 hover:scale-105">
                   <AgentCard
@@ -223,12 +260,6 @@ export default function AgentsPage() {
             )}
           </div>
         )}
-
-        <CreateAgentDrawer
-          open={isCreateOpen}
-          onOpenChange={setIsCreateOpen}
-          onSubmit={handleCreateAgent}
-        />
       </div>
     </div>
   )

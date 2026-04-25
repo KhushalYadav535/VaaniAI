@@ -5,8 +5,9 @@ import { CallsTable } from '@/components/logs/calls-table'
 import { CallFilters } from '@/components/logs/call-filters'
 import { callsApi } from '@/lib/api'
 import { CallLog } from '@/lib/types'
+import { MessageCircle } from 'lucide-react'
 
-export default function CallLogsPage() {
+export default function ChatLogsPage() {
   const [logs, setLogs] = useState<CallLog[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filters, setFilters] = useState({
@@ -23,9 +24,14 @@ export default function CallLogsPage() {
   const fetchLogs = async () => {
     try {
       setIsLoading(true)
-      const data = await callsApi.getAll({ limit: 100 })
+      const data = await callsApi.getAll({ limit: 200 })
       if (data && data.calls) {
-        const mappedLogs = data.calls.map((c: any) => ({
+        // Filter ONLY WhatsApp or text chats
+        const chatLogs = data.calls.filter((c: any) => 
+          c.fromNumber?.startsWith('whatsapp:') || !c.callSid
+        )
+
+        const mappedLogs = chatLogs.map((c: any) => ({
           ...c,
           id: c._id || c.id,
           agentId: c.agentId?._id || c.agentId || '',
@@ -34,7 +40,7 @@ export default function CallLogsPage() {
         setLogs(mappedLogs)
       }
     } catch (error) {
-      console.error('Failed to fetch logs:', error)
+      console.error('Failed to fetch chat logs:', error)
     } finally {
       setIsLoading(false)
     }
@@ -62,16 +68,21 @@ export default function CallLogsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">Call Logs</h1>
-        <p className="text-slate-600 dark:text-slate-400 mt-2 font-light">View and analyze all call history and recordings.</p>
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
+          <MessageCircle className="w-6 h-6 text-green-500" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">Omni-Channel Chats</h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-1 font-light text-sm">View WhatsApp and SMS conversation history.</p>
+        </div>
       </div>
 
       <CallFilters filters={filters} onFiltersChange={setFilters} />
       
       {isLoading ? (
         <div className="text-center py-12 text-slate-500 font-light text-sm bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 rounded-2xl shadow-sm">
-          Loading call logs...
+          Loading chat history...
         </div>
       ) : (
         <CallsTable logs={filteredLogs} />

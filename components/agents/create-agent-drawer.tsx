@@ -41,7 +41,7 @@ export function CreateAgentDrawer({
             </DrawerClose>
           </DrawerHeader>
 
-          <div className="px-4 pb-6">
+          <div className="px-4 pb-6 overflow-y-auto max-h-[75vh]">
             <AgentForm onSubmit={onSubmit} />
           </div>
         </div>

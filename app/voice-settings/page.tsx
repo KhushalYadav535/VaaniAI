@@ -1,483 +1,331 @@
 'use client'
 
-import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
-import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Mic, Volume2, Languages, Settings, Play, Pause, RotateCcw } from 'lucide-react'
+import { publicApi, agentsApi, twilioApi } from '@/lib/api'
+import {
+  Volume2, Play, Pause, Phone, Zap, Settings,
+  Loader2, PhoneOutgoing, Bot, Globe, Check
+} from 'lucide-react'
 
-const voiceProviders = [
-  { id: 'elevenlabs', name: 'ElevenLabs', models: ['Rachel', 'Domi', 'Bella', 'Antoni', 'Elli'] },
-  { id: 'google', name: 'Google TTS', models: ['en-US-Neural2-A', 'en-US-Neural2-C', 'en-US-Neural2-D'] },
-  { id: 'azure', name: 'Azure Speech', models: ['en-US-AriaNeural', 'en-US-JennyNeural', 'en-US-GuyNeural'] },
-  { id: 'openai', name: 'OpenAI TTS', models: ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] },
+const VOICES = [
+  { id: 'en-US-JennyNeural', name: 'Jenny', lang: 'English (US)', gender: 'Female', personality: 'Friendly & professional' },
+  { id: 'en-US-GuyNeural', name: 'Guy', lang: 'English (US)', gender: 'Male', personality: 'Clear & confident' },
+  { id: 'en-US-AriaNeural', name: 'Aria', lang: 'English (US)', gender: 'Female', personality: 'Warm & natural' },
+  { id: 'en-US-DavisNeural', name: 'Davis', lang: 'English (US)', gender: 'Male', personality: 'Deep & engaging' },
+  { id: 'en-US-ChristopherNeural', name: 'Christopher', lang: 'English (US)', gender: 'Male', personality: 'Authoritative' },
+  { id: 'en-GB-SoniaNeural', name: 'Sonia', lang: 'English (UK)', gender: 'Female', personality: 'Elegant & articulate' },
+  { id: 'en-GB-RyanNeural', name: 'Ryan', lang: 'English (UK)', gender: 'Male', personality: 'Crisp British accent' },
+  { id: 'hi-IN-SwaraNeural', name: 'Swara', lang: 'Hindi (India)', gender: 'Female', personality: 'Warm Indian voice' },
+  { id: 'hi-IN-MadhurNeural', name: 'Madhur', lang: 'Hindi (India)', gender: 'Male', personality: 'Smooth Indian voice' },
+  { id: 'es-ES-ElviraNeural', name: 'Elvira', lang: 'Spanish (ES)', gender: 'Female', personality: 'Vivid & expressive' },
 ]
 
-const languages = [
-  { code: 'en-US', name: 'English (US)', flag: 'US' },
-  { code: 'en-GB', name: 'English (UK)', flag: 'GB' },
-  { code: 'es-ES', name: 'Spanish (Spain)', flag: 'ES' },
-  { code: 'fr-FR', name: 'French (France)', flag: 'FR' },
-  { code: 'de-DE', name: 'German (Germany)', flag: 'DE' },
-  { code: 'it-IT', name: 'Italian (Italy)', flag: 'IT' },
-  { code: 'pt-BR', name: 'Portuguese (Brazil)', flag: 'BR' },
-  { code: 'ja-JP', name: 'Japanese (Japan)', flag: 'JP' },
-  { code: 'ko-KR', name: 'Korean (South Korea)', flag: 'KR' },
-  { code: 'zh-CN', name: 'Chinese (Simplified)', flag: 'CN' },
-]
+const PREVIEW_TEXTS: Record<string, string> = {
+  'hi-IN-SwaraNeural': 'नमस्ते! मैं आपकी AI असिस्टेंट हूं। आज मैं आपकी कैसे मदद कर सकती हूं?',
+  'hi-IN-MadhurNeural': 'नमस्ते! मैं VaaniAI का AI असिस्टेंट हूं। मुझसे कोई भी सवाल पूछें।',
+  'es-ES-ElviraNeural': 'Hola! Soy tu asistente de inteligencia artificial. ¿En qué puedo ayudarte hoy?',
+}
+const DEFAULT_PREVIEW = "Hello! I'm your AI assistant powered by VaaniAI. How can I help you today?"
 
 export default function VoiceSettingsPage() {
-  const [selectedProvider, setSelectedProvider] = useState('elevenlabs')
-  const [selectedModel, setSelectedModel] = useState('Rachel')
-  const [selectedLanguage, setSelectedLanguage] = useState('en-US')
-  const [pitch, setPitch] = useState([1.0])
-  const [speed, setSpeed] = useState([1.0])
-  const [volume, setVolume] = useState([0.8])
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [testText, setTestText] = useState('Hello! This is a sample of how your voice agent will sound.')
-  const [advancedSettings, setAdvancedSettings] = useState({
-    enableNoiseReduction: true,
-    enableEchoCancellation: true,
-    enableBackgroundMusic: false,
-    enableVoiceCloning: false,
-    enableEmotionalTone: true,
-  })
+  const [selectedVoice, setSelectedVoice] = useState('en-US-JennyNeural')
+  const [speed, setSpeed] = useState(1.0)
+  const [previewText, setPreviewText] = useState(DEFAULT_PREVIEW)
+  const [playing, setPlaying] = useState<string | null>(null)
+  const [agents, setAgents] = useState<any[]>([])
+  const [selectedAgent, setSelectedAgent] = useState('')
+  const [callTo, setCallTo] = useState('')
+  const [calling, setCalling] = useState(false)
+  const [callStatus, setCallStatus] = useState('')
+  const [filter, setFilter] = useState('all')
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const currentProvider = voiceProviders.find(p => p.id === selectedProvider)
+  useEffect(() => {
+    agentsApi.getAll({ status: 'active' }).then((d: any) => setAgents(d.agents || [])).catch(() => {})
+  }, [])
 
-  const handleTestVoice = () => {
-    setIsPlaying(!isPlaying)
-    // Simulate voice playback
-    if (!isPlaying) {
-      setTimeout(() => setIsPlaying(false), 3000)
+  const previewVoice = async (voiceId: string) => {
+    if (playing === voiceId) {
+      audioRef.current?.pause()
+      setPlaying(null)
+      return
+    }
+
+    setPlaying(voiceId)
+    try {
+      const text = PREVIEW_TEXTS[voiceId] || DEFAULT_PREVIEW
+      // Call backend TTS preview endpoint
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/voice-preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text, voiceId, speed }),
+      })
+
+      if (!res.ok) throw new Error('Preview failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+
+      if (audioRef.current) audioRef.current.pause()
+      audioRef.current = new Audio(url)
+      audioRef.current.onended = () => setPlaying(null)
+      audioRef.current.onerror = () => setPlaying(null)
+      await audioRef.current.play()
+    } catch (e) {
+      setPlaying(null)
     }
   }
 
+  const makeCall = async () => {
+    if (!callTo || !selectedAgent) return
+    setCalling(true)
+    setCallStatus('')
+    try {
+      const data: any = await twilioApi.makeOutboundCall(callTo, selectedAgent)
+      setCallStatus(`✅ Calling ${callTo}... Call SID: ${data.callSid}`)
+    } catch (err: any) {
+      setCallStatus(`❌ ${err.message}`)
+    } finally {
+      setCalling(false)
+    }
+  }
+
+  const filteredVoices = filter === 'all' ? VOICES :
+    VOICES.filter(v => {
+      if (filter === 'hindi') return v.lang.includes('Hindi')
+      if (filter === 'english') return v.lang.includes('English')
+      if (filter === 'female') return v.gender === 'Female'
+      if (filter === 'male') return v.gender === 'Male'
+      return true
+    })
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-50">Voice Settings</h1>
-          <p className="text-slate-400 mt-2">Configure voice synthesis and audio settings for your agents.</p>
+    <div className="min-h-screen p-6 space-y-6">
+      {/* Header */}
+      <div className="relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-violet-600/5 to-pink-600/5 rounded-3xl blur-xl" />
+        <div className="relative bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200/50 dark:border-slate-800/50 p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-purple-600 flex items-center justify-center">
+              <Volume2 className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-thin text-slate-900 dark:text-white">Voice Settings</h1>
+              <p className="text-sm text-slate-500 font-light">Choose voices, preview them, and make outbound calls</p>
+            </div>
+            <div className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-950/30 border border-green-200/50">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              <span className="text-xs font-light text-green-700 dark:text-green-400">FREE — No API Key needed</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <Tabs defaultValue="basic" className="space-y-6">
-        <TabsList className="bg-slate-900 border-slate-800">
-          <TabsTrigger value="basic" className="data-[state=active]:bg-slate-800">Basic Settings</TabsTrigger>
-          <TabsTrigger value="advanced" className="data-[state=active]:bg-slate-800">Advanced</TabsTrigger>
-          <TabsTrigger value="testing" className="data-[state=active]:bg-slate-800">Voice Testing</TabsTrigger>
-          <TabsTrigger value="cloning" className="data-[state=active]:bg-slate-800">Voice Cloning</TabsTrigger>
-        </TabsList>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        <TabsContent value="basic" className="space-y-6">
-          {/* Voice Provider Selection */}
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-50 flex items-center gap-2">
-                <Mic className="w-5 h-5" />
-                Voice Provider
-              </CardTitle>
-              <CardDescription className="text-slate-400">
-                Choose your preferred text-to-speech provider
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {voiceProviders.map((provider) => (
-                  <div
-                    key={provider.id}
-                    className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                      selectedProvider === provider.id
-                        ? 'border-purple-600 bg-purple-600/10'
-                        : 'border-slate-700 bg-slate-800 hover:border-slate-600'
-                    }`}
-                    onClick={() => setSelectedProvider(provider.id)}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-slate-50">{provider.name}</span>
-                      {selectedProvider === provider.id && (
-                        <Badge variant="outline" className="border-purple-600 text-purple-600">
-                          Active
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-slate-400">{provider.models.length} voices available</p>
+        {/* Voice Selection */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Filters */}
+          <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200/50 dark:border-slate-800/50 p-1.5 flex gap-1 flex-wrap">
+            {[
+              { id: 'all', label: 'All Voices' },
+              { id: 'english', label: '🇺🇸 English' },
+              { id: 'hindi', label: '🇮🇳 Hindi' },
+              { id: 'female', label: '👩 Female' },
+              { id: 'male', label: '👨 Male' },
+            ].map(f => (
+              <button key={f.id} onClick={() => setFilter(f.id)}
+                className={`flex-1 py-2 px-3 rounded-2xl text-sm font-light transition-all ${
+                  filter === f.id
+                    ? 'bg-gradient-to-r from-violet-600/20 to-purple-600/20 text-purple-700 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/50'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100/50 dark:hover:bg-slate-800/50'
+                }`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Voice Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {filteredVoices.map(voice => (
+              <div key={voice.id}
+                onClick={() => setSelectedVoice(voice.id)}
+                className={`relative bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border-2 p-4 cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                  selectedVoice === voice.id
+                    ? 'border-purple-400/60 dark:border-purple-600/60 bg-gradient-to-br from-violet-600/5 to-purple-600/5'
+                    : 'border-slate-200/50 dark:border-slate-800/50 hover:border-purple-300/50'
+                }`}>
+                {selectedVoice === voice.id && (
+                  <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-gradient-to-br from-violet-600 to-purple-600 flex items-center justify-center">
+                    <Check className="w-3 h-3 text-white" />
                   </div>
-                ))}
+                )}
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-light flex-shrink-0 ${
+                    voice.gender === 'Female' ? 'bg-gradient-to-br from-pink-500 to-rose-500' : 'bg-gradient-to-br from-blue-500 to-cyan-500'
+                  }`}>
+                    {voice.name[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-light text-slate-800 dark:text-slate-200">{voice.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-light">{voice.lang} · {voice.gender}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 font-light mt-0.5 truncate">{voice.personality}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); previewVoice(voice.id) }}
+                  className={`mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-light transition-all ${
+                    playing === voice.id
+                      ? 'bg-red-100 dark:bg-red-950/30 text-red-600 dark:text-red-400'
+                      : 'bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:bg-purple-100 dark:hover:bg-purple-950/30 hover:text-purple-600'
+                  }`}>
+                  {playing === voice.id
+                    ? <><Pause className="w-3 h-3" /> Playing...</>
+                    : <><Play className="w-3 h-3" /> Preview Voice</>}
+                </button>
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
+        </div>
 
-          {/* Voice Model Selection */}
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-50">Voice Model</CardTitle>
-              <CardDescription className="text-slate-400">
-                Select the specific voice model for your agent
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-slate-800">
-                  {currentProvider?.models.map((model) => (
-                    <SelectItem key={model} value={model}>
-                      {model}
-                    </SelectItem>
+        {/* Right Panel */}
+        <div className="space-y-4">
+          {/* Preview Controls */}
+          <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200/50 dark:border-slate-800/50 p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Settings className="w-4 h-4 text-purple-600" />
+              <h2 className="text-sm font-light text-slate-700 dark:text-slate-300">Preview Settings</h2>
+            </div>
+
+            {/* Speed slider */}
+            <div className="space-y-2 mb-4">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-light text-slate-600 dark:text-slate-400">Speed</label>
+                <span className="text-xs font-light text-purple-600 dark:text-purple-400">{speed}x</span>
+              </div>
+              <Slider
+                value={[speed]}
+                min={0.5} max={2.0} step={0.1}
+                onValueChange={([v]) => setSpeed(v)}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-slate-400 font-light">
+                <span>0.5x Slow</span>
+                <span>1x Normal</span>
+                <span>2x Fast</span>
+              </div>
+            </div>
+
+            {/* Preview text */}
+            <div className="space-y-2">
+              <label className="text-xs font-light text-slate-600 dark:text-slate-400">Preview text</label>
+              <textarea
+                value={previewText}
+                onChange={(e) => setPreviewText(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 rounded-xl text-xs font-light text-slate-700 dark:text-slate-300 resize-none focus:outline-none focus:border-purple-400"
+              />
+            </div>
+
+            <button
+              onClick={() => previewVoice(selectedVoice)}
+              disabled={!!playing}
+              className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-light hover:from-violet-700 hover:to-purple-700 transition-all disabled:opacity-60"
+            >
+              {playing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
+              {playing ? 'Playing...' : 'Preview Selected Voice'}
+            </button>
+
+            {/* Selected voice info */}
+            {(() => {
+              const v = VOICES.find(v => v.id === selectedVoice)
+              return v ? (
+                <div className="mt-3 p-3 rounded-2xl bg-purple-50 dark:bg-purple-950/20 border border-purple-200/30">
+                  <p className="text-xs font-light text-purple-700 dark:text-purple-300">
+                    Selected: <strong>{v.name}</strong> — {v.lang}
+                  </p>
+                  <p className="text-xs text-slate-500 font-light mt-0.5">Copy voice ID to use in agents:</p>
+                  <code className="text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded font-mono">{v.id}</code>
+                </div>
+              ) : null
+            })()}
+          </div>
+
+          {/* Outbound Call Panel */}
+          <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200/50 dark:border-slate-800/50 p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <PhoneOutgoing className="w-4 h-4 text-green-600" />
+              <h2 className="text-sm font-light text-slate-700 dark:text-slate-300">Make Outbound Call</h2>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-light text-slate-600 dark:text-slate-400 mb-1 block">Select Agent</label>
+                <select
+                  value={selectedAgent}
+                  onChange={e => setSelectedAgent(e.target.value)}
+                  className="w-full h-9 px-3 bg-white/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 rounded-xl text-sm font-light text-slate-700 dark:text-slate-300 focus:outline-none focus:border-purple-400"
+                >
+                  <option value="">Choose agent...</option>
+                  {agents.map(a => (
+                    <option key={a._id} value={a._id}>{a.name}</option>
                   ))}
-                </SelectContent>
-              </Select>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 bg-slate-800 rounded-lg">
-                  <h4 className="font-medium text-slate-50 mb-2">Voice Characteristics</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Gender:</span>
-                      <span className="text-slate-50">Female</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Age Range:</span>
-                      <span className="text-slate-50">25-35</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Accent:</span>
-                      <span className="text-slate-50">Neutral</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-4 bg-slate-800 rounded-lg">
-                  <h4 className="font-medium text-slate-50 mb-2">Quality Settings</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Sample Rate:</span>
-                      <span className="text-slate-50">24kHz</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Bitrate:</span>
-                      <span className="text-slate-50">128kbps</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Format:</span>
-                      <span className="text-slate-50">MP3</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Voice Parameters */}
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-50 flex items-center gap-2">
-                <Settings className="w-5 h-5" />
-                Voice Parameters
-              </CardTitle>
-              <CardDescription className="text-slate-400">
-                Fine-tune voice characteristics
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-slate-200">Pitch</Label>
-                  <span className="text-sm text-slate-400">{pitch[0].toFixed(2)}</span>
-                </div>
-                <Slider
-                  value={pitch}
-                  onValueChange={setPitch}
-                  min={0.5}
-                  max={2.0}
-                  step={0.1}
-                  className="w-full"
-                />
+                </select>
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-slate-200">Speed</Label>
-                  <span className="text-sm text-slate-400">{speed[0].toFixed(2)}x</span>
-                </div>
-                <Slider
-                  value={speed}
-                  onValueChange={setSpeed}
-                  min={0.5}
-                  max={2.0}
-                  step={0.1}
-                  className="w-full"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-slate-200">Volume</Label>
-                  <span className="text-sm text-slate-400">{Math.round(volume[0] * 100)}%</span>
-                </div>
-                <Slider
-                  value={volume}
-                  onValueChange={setVolume}
-                  min={0}
-                  max={1.0}
-                  step={0.1}
-                  className="w-full"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="advanced" className="space-y-6">
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-50">Advanced Audio Settings</CardTitle>
-              <CardDescription className="text-slate-400">
-                Configure advanced audio processing options
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {Object.entries(advancedSettings).map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label className="text-slate-200">
-                      {key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase())}
-                    </Label>
-                    <p className="text-sm text-slate-400">
-                      {key === 'enableNoiseReduction' && 'Reduce background noise in audio input'}
-                      {key === 'enableEchoCancellation' && 'Remove echo from audio output'}
-                      {key === 'enableBackgroundMusic' && 'Add subtle background music'}
-                      {key === 'enableVoiceCloning' && 'Allow voice cloning capabilities'}
-                      {key === 'enableEmotionalTone' && 'Detect and respond to emotional tone'}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={value}
-                    onCheckedChange={(checked) =>
-                      setAdvancedSettings(prev => ({ ...prev, [key]: checked }))
-                    }
+                <label className="text-xs font-light text-slate-600 dark:text-slate-400 mb-1 block">Phone Number</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <Input
+                    placeholder="+1234567890"
+                    value={callTo}
+                    onChange={e => setCallTo(e.target.value)}
+                    className="pl-9 h-9 bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 rounded-xl font-light text-sm"
                   />
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-50">Language Settings</CardTitle>
-              <CardDescription className="text-slate-400">
-                Configure language and accent preferences
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-slate-800">
-                  {languages.map((lang) => (
-                    <SelectItem key={lang.code} value={lang.code}>
-                      <div className="flex items-center gap-2">
-                        <span>{lang.flag}</span>
-                        <span>{lang.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Accent Style</Label>
-                  <Select>
-                    <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-50">
-                      <SelectValue placeholder="Select accent" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-slate-800">
-                      <SelectItem value="neutral">Neutral</SelectItem>
-                      <SelectItem value="formal">Formal</SelectItem>
-                      <SelectItem value="casual">Casual</SelectItem>
-                      <SelectItem value="friendly">Friendly</SelectItem>
-                      <SelectItem value="professional">Professional</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Speaking Style</Label>
-                  <Select>
-                    <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-50">
-                      <SelectValue placeholder="Select style" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-slate-800">
-                      <SelectItem value="conversational">Conversational</SelectItem>
-                      <SelectItem value="narrative">Narrative</SelectItem>
-                      <SelectItem value="news">News Report</SelectItem>
-                      <SelectItem value="customer-service">Customer Service</SelectItem>
-                      <SelectItem value="empathetic">Empathetic</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="testing" className="space-y-6">
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-50 flex items-center gap-2">
-                <Play className="w-5 h-5" />
-                Voice Testing
-              </CardTitle>
-              <CardDescription className="text-slate-400">
-                Test your voice configuration with custom text
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-slate-200">Test Text</Label>
-                <textarea
-                  value={testText}
-                  onChange={(e) => setTestText(e.target.value)}
-                  className="w-full h-24 p-3 bg-slate-800 border-slate-700 text-slate-50 rounded-lg resize-none focus:border-purple-600 focus:outline-none"
-                  placeholder="Enter text to test voice synthesis..."
-                />
               </div>
 
-              <div className="flex items-center gap-4">
-                <Button
-                  onClick={handleTestVoice}
-                  className="bg-purple-600 hover:bg-purple-700 text-white"
-                >
-                  {isPlaying ? (
-                    <>
-                      <Pause className="w-4 h-4 mr-2" />
-                      Stop
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 mr-2" />
-                      Play Sample
-                    </>
-                  )}
-                </Button>
-                <Button variant="outline" className="border-slate-700 text-slate-300">
-                  <RotateCcw className="w-4 h-4 mr-2" />
-                  Reset Settings
-                </Button>
-              </div>
+              <Button
+                onClick={makeCall}
+                disabled={calling || !callTo || !selectedAgent}
+                className="w-full h-9 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-light rounded-xl text-sm shadow-lg shadow-green-500/25 transition-all hover:scale-[1.02] disabled:opacity-60"
+              >
+                {calling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <PhoneOutgoing className="w-4 h-4 mr-2" />}
+                {calling ? 'Calling...' : 'Start Call'}
+              </Button>
 
-              {isPlaying && (
-                <div className="p-4 bg-slate-800 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Volume2 className="w-4 h-4 text-purple-400" />
-                    <span className="text-sm text-slate-400">Playing audio sample...</span>
-                  </div>
-                  <div className="w-full bg-slate-700 rounded-full h-2">
-                    <div className="bg-purple-600 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
-                  </div>
+              {callStatus && (
+                <div className={`p-3 rounded-xl text-xs font-light ${
+                  callStatus.startsWith('✅')
+                    ? 'bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border border-green-200/50'
+                    : 'bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-200/50'
+                }`}>
+                  {callStatus}
                 </div>
               )}
-            </CardContent>
-          </Card>
 
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-50">Audio Quality Metrics</CardTitle>
-              <CardDescription className="text-slate-400">
-                Monitor voice synthesis quality and performance
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-slate-800 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-slate-400">Latency</span>
-                    <span className="text-green-500 text-sm">Good</span>
-                  </div>
-                  <p className="text-2xl font-bold text-slate-50">120ms</p>
-                </div>
-                <div className="p-4 bg-slate-800 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-slate-400">Quality Score</span>
-                    <span className="text-green-500 text-sm">Excellent</span>
-                  </div>
-                  <p className="text-2xl font-bold text-slate-50">9.2/10</p>
-                </div>
-                <div className="p-4 bg-slate-800 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-slate-400">Naturalness</span>
-                    <span className="text-yellow-500 text-sm">Good</span>
-                  </div>
-                  <p className="text-2xl font-bold text-slate-50">85%</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              <p className="text-xs text-slate-400 font-light">
+                Requires Twilio credentials in Settings. Free trial includes limited call minutes.
+              </p>
+            </div>
+          </div>
 
-        <TabsContent value="cloning" className="space-y-6">
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-50">Voice Cloning</CardTitle>
-              <CardDescription className="text-slate-400">
-                Create custom voice models from audio samples
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="border-2 border-dashed border-slate-700 rounded-lg p-8 text-center">
-                <Mic className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                <p className="text-slate-50 font-medium mb-2">Upload Voice Sample</p>
-                <p className="text-sm text-slate-400 mb-4">
-                  Upload a 30-60 second audio sample for voice cloning
-                </p>
-                <Button className="bg-purple-600 hover:bg-purple-700 text-white">
-                  Choose Audio File
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Sample Quality</Label>
-                  <Select>
-                    <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-50">
-                      <SelectValue placeholder="Select quality" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-slate-800">
-                      <SelectItem value="low">Low (8kHz)</SelectItem>
-                      <SelectItem value="medium">Medium (16kHz)</SelectItem>
-                      <SelectItem value="high">High (44.1kHz)</SelectItem>
-                      <SelectItem value="studio">Studio Quality (48kHz)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-200">Voice Type</Label>
-                  <Select>
-                    <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-50">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-slate-800">
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="child">Child</SelectItem>
-                      <SelectItem value="elderly">Elderly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+          {/* Free badge */}
+          <div className="bg-gradient-to-br from-violet-600/5 to-pink-600/5 rounded-3xl border border-purple-200/30 dark:border-purple-800/30 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="w-4 h-4 text-purple-600" />
+              <span className="text-xs font-light text-purple-700 dark:text-purple-300">Edge TTS — 100% Free</span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-light">
+              All 30+ voices use Microsoft&apos;s Neural TTS. No API key, no cost, no limits.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

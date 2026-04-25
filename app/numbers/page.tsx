@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { NumbersTable } from '@/components/numbers/numbers-table'
 import { BuyNumberModal } from '@/components/numbers/buy-number-modal'
-import { mockPhoneNumbers } from '@/lib/mock-data'
 import { mockAgents } from '@/lib/mock-data'
 import { PhoneNumber } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -11,7 +10,7 @@ import { Plus, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
 export default function NumbersPage() {
-  const [numbers, setNumbers] = useState<PhoneNumber[]>(mockPhoneNumbers)
+  const [numbers, setNumbers] = useState<PhoneNumber[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isBuyOpen, setIsBuyOpen] = useState(false)
 
@@ -49,19 +48,19 @@ export default function NumbersPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-50">Phone Numbers</h1>
-          <p className="text-slate-400 mt-2">Manage and purchase phone numbers for your agents.</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-50">Phone Numbers</h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-2 font-light">Manage and purchase phone numbers for your agents.</p>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={18} />
             <Input
               type="search"
               placeholder="Search by number or country..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-slate-900 border-slate-800 text-slate-50 placeholder:text-slate-500 focus:border-purple-600"
+              className="pl-10 h-11 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border-slate-200/50 dark:border-slate-800/50 text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-purple-500 dark:focus:border-purple-600 rounded-2xl transition-colors font-light"
             />
           </div>
           <Button

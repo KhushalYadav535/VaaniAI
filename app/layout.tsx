@@ -3,14 +3,16 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { ThemeProvider } from '@/components/providers/theme-provider'
+import { AuthProvider } from '@/components/providers/auth-provider'
 import { AppShell } from '@/components/layout/app-shell'
+import { Toaster } from 'react-hot-toast'
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'VoiceAgent Platform',
-  description: 'AI Voice Agent Management Dashboard',
+  title: 'VaaniAI Platform',
+  description: 'The most configurable API to build voice AI agents.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -40,7 +42,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased" suppressHydrationWarning>
         <ThemeProvider>
-          <AppShell>{children}</AppShell>
+          <AuthProvider>
+            <AppShell>{children}</AppShell>
+            <Toaster position="bottom-right" />
+          </AuthProvider>
         </ThemeProvider>
         <Analytics />
       </body>
