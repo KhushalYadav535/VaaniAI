@@ -1,120 +1,129 @@
+/**
+ * VaaniAI Web Widget
+ * Include this script on any webpage to add an AI voice agent floating button.
+ */
+
 (function() {
-  const currentScript = document.currentScript;
-  if (!currentScript) return;
-
-  const agentId = currentScript.getAttribute('data-agent-id');
-  const widgetColor = currentScript.getAttribute('data-color') || '#8b5cf6';
-  const position = currentScript.getAttribute('data-position') || 'bottom-right';
-
-  if (!agentId) {
-    console.error('VaaniAI Widget: Missing data-agent-id attribute');
-    return;
+  // Wait for DOM to be ready
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    initWidget();
+  } else {
+    document.addEventListener('DOMContentLoaded', initWidget);
   }
 
-  // Inject styles
-  const style = document.createElement('style');
-  style.innerHTML = `
-    .vaaniai-widget-btn {
-      position: fixed;
-      ${position.includes('bottom') ? 'bottom: 24px;' : 'top: 24px;'}
-      ${position.includes('right') ? 'right: 24px;' : 'left: 24px;'}
-      width: 60px;
-      height: 60px;
-      border-radius: 30px;
-      background: ${widgetColor};
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-      cursor: pointer;
-      z-index: 999999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-    .vaaniai-widget-btn:hover {
-      transform: scale(1.1);
-    }
-    .vaaniai-widget-btn svg {
-      width: 28px;
-      height: 28px;
-      fill: white;
-    }
-    .vaaniai-widget-iframe-container {
-      position: fixed;
-      ${position.includes('bottom') ? 'bottom: 100px;' : 'top: 100px;'}
-      ${position.includes('right') ? 'right: 24px;' : 'left: 24px;'}
-      width: 380px;
-      height: 600px;
-      max-height: calc(100vh - 120px);
-      background: white;
-      border-radius: 24px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.15);
-      z-index: 999999;
-      overflow: hidden;
-      opacity: 0;
-      pointer-events: none;
-      transform: translateY(20px);
-      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-    .vaaniai-widget-iframe-container.open {
-      opacity: 1;
-      pointer-events: auto;
-      transform: translateY(0);
-    }
-    .vaaniai-widget-iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-    @media (max-width: 480px) {
-      .vaaniai-widget-iframe-container {
-        width: calc(100vw - 32px);
-        left: 16px;
-        right: 16px;
-        bottom: 100px;
-      }
-    }
-  `;
-  document.head.appendChild(style);
+  function initWidget() {
+    const config = window.vaaniConfig || {
+      agentId: 'YOUR_AGENT_ID',
+      color: '#8b5cf6',
+      text: 'Talk to AI Support',
+      position: 'bottom-right'
+    };
 
-  // Create Button
-  const btn = document.createElement('div');
-  btn.className = 'vaaniai-widget-btn';
-  btn.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-    </svg>
-  `;
-
-  // Create Iframe Container
-  const container = document.createElement('div');
-  container.className = 'vaaniai-widget-iframe-container';
-  
-  // Note: we point to the standalone widget page which we will create next
-  // Or point directly to test-agent with a compact param
-  // Assuming frontend runs on window.location.origin if self-hosted, else replace with actual hosted URL
-  const scriptUrl = new URL(currentScript.src);
-  const baseUrl = scriptUrl.origin;
-  
-  const iframe = document.createElement('iframe');
-  iframe.className = 'vaaniai-widget-iframe';
-  iframe.allow = "microphone";
-  iframe.src = \`\${baseUrl}/test-agent?agentId=\${agentId}&widget=true\`;
-  
-  container.appendChild(iframe);
-  document.body.appendChild(container);
-  document.body.appendChild(btn);
-
-  let isOpen = false;
-  btn.addEventListener('click', () => {
-    isOpen = !isOpen;
-    if (isOpen) {
-      container.classList.add('open');
-      btn.innerHTML = \`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>\`;
+    // Create a container for the widget
+    const container = document.createElement('div');
+    container.id = 'vaaniai-widget-container';
+    container.style.position = 'fixed';
+    container.style.zIndex = '999999';
+    
+    if (config.position === 'bottom-left') {
+      container.style.bottom = '20px';
+      container.style.left = '20px';
     } else {
-      container.classList.remove('open');
-      btn.innerHTML = \`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>\`;
-      // Optional: Post message to iframe to end call if closed
-      iframe.contentWindow.postMessage({ type: 'close_widget' }, '*');
+      container.style.bottom = '20px';
+      container.style.right = '20px';
     }
-  });
+
+    // Determine base URL dynamically (assuming this script is loaded from the VaaniAI host)
+    // fallback to localhost if cannot determine
+    const scriptTag = document.currentScript;
+    let baseUrl = 'http://localhost:3000';
+    if (scriptTag && scriptTag.src) {
+      const url = new URL(scriptTag.src);
+      baseUrl = url.origin;
+    }
+
+    // Create the iframe (hidden initially)
+    const iframe = document.createElement('iframe');
+    // Using the dedicated widget view page
+    iframe.src = `${baseUrl}/widget?agentId=${config.agentId}`;
+    iframe.style.width = '380px';
+    iframe.style.height = '600px';
+    iframe.style.border = 'none';
+    iframe.style.borderRadius = '16px';
+    iframe.style.boxShadow = '0 20px 40px rgba(0,0,0,0.15)';
+    iframe.style.display = 'none';
+    iframe.style.marginBottom = '20px';
+    iframe.style.backgroundColor = 'white';
+    iframe.style.transition = 'all 0.3s ease';
+    iframe.style.transformOrigin = config.position === 'bottom-left' ? 'bottom left' : 'bottom right';
+    iframe.style.transform = 'scale(0)';
+    iframe.allow = "microphone";
+
+    // Create the floating button
+    const button = document.createElement('button');
+    button.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+      </svg>
+      <span style="font-family: inherit; font-weight: 500;">${config.text}</span>
+    `;
+    button.style.backgroundColor = config.color;
+    button.style.color = 'white';
+    button.style.border = 'none';
+    button.style.borderRadius = '9999px';
+    button.style.padding = '12px 24px';
+    button.style.fontSize = '16px';
+    button.style.cursor = 'pointer';
+    button.style.display = 'flex';
+    button.style.alignItems = 'center';
+    button.style.boxShadow = '0 8px 16px rgba(0,0,0,0.1)';
+    button.style.transition = 'transform 0.2s ease, box-shadow 0.2s ease';
+    if (config.position === 'bottom-right') {
+      button.style.marginLeft = 'auto';
+    }
+
+    button.onmouseover = () => {
+      button.style.transform = 'translateY(-2px)';
+      button.style.boxShadow = '0 12px 20px rgba(0,0,0,0.15)';
+    };
+    button.onmouseout = () => {
+      button.style.transform = 'translateY(0)';
+      button.style.boxShadow = '0 8px 16px rgba(0,0,0,0.1)';
+    };
+
+    let isOpen = false;
+
+    button.onclick = () => {
+      isOpen = !isOpen;
+      if (isOpen) {
+        iframe.style.display = 'block';
+        // Trigger reflow
+        void iframe.offsetWidth;
+        iframe.style.transform = 'scale(1)';
+        button.innerHTML = `
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        `;
+        button.style.padding = '16px';
+      } else {
+        iframe.style.transform = 'scale(0)';
+        setTimeout(() => {
+          iframe.style.display = 'none';
+        }, 300);
+        button.innerHTML = `
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+          </svg>
+          <span style="font-family: inherit; font-weight: 500;">${config.text}</span>
+        `;
+        button.style.padding = '12px 24px';
+      }
+    };
+
+    container.appendChild(iframe);
+    container.appendChild(button);
+    document.body.appendChild(container);
+  }
 })();

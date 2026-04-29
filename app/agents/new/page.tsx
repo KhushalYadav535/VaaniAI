@@ -27,7 +27,8 @@ export default function CreateAgentPage() {
         tools,
         voice: {
           provider: newAgent.voiceProvider,
-          voiceId: newAgent.voiceId || 'en-US-JennyNeural'
+          voiceId: newAgent.voiceId || 'en-US-JennyNeural',
+          speed: newAgent.voiceSpeed || 1.0,
         },
         llm: {
           provider: newAgent.llmProvider,
@@ -44,9 +45,6 @@ export default function CreateAgentPage() {
           whatsappTemplate: newAgent.whatsappTemplate,
         },
         transferToAgentId: newAgent.transferToAgentId,
-        voice: {
-          speed: newAgent.voiceSpeed || 1.0,
-        },
         advanced: {
           customLlmUrl: newAgent.customLlmUrl,
           interruptionSensitivity: newAgent.interruptionSensitivity,

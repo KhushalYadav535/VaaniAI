@@ -126,6 +126,8 @@ export const callsApi = {
     return apiRequest(`/calls${query ? '?' + query : ''}`);
   },
 
+  getActive: () => apiRequest('/calls/active'),
+
   getById: (id: string) => apiRequest(`/calls/${id}`),
 
   getTranscript: (id: string) => apiRequest(`/calls/${id}/transcript`),
@@ -262,13 +264,22 @@ export const twilioApi = {
 
 // ─── WebSocket Voice Session ─────────────────────────────────────────────────
 
-export function createVoiceSession(agentId: string): WebSocket {
+export function createVoiceSession(
+  agentId: string,
+  options?: { preferBinaryAudio?: boolean }
+): WebSocket {
   const token = localStorage.getItem('token');
   const ws = new WebSocket(`${WS_BASE}/ws/voice`);
+  ws.binaryType = 'arraybuffer';
 
   ws.onopen = () => {
     // Initialize session
-    ws.send(JSON.stringify({ type: 'init', agentId, token }));
+    ws.send(JSON.stringify({
+      type: 'init',
+      agentId,
+      token,
+      preferBinaryAudio: options?.preferBinaryAudio ?? true,
+    }));
   };
 
   return ws;
@@ -297,10 +308,29 @@ export const webhooksLogsApi = {
 
 export const superAdminApi = {
   getStats: () => apiRequest('/super-admin/stats'),
-  getUsers: () => apiRequest('/super-admin/users'),
+  getUsers: (search = '') => apiRequest(`/super-admin/users?search=${encodeURIComponent(search)}`),
+  getUserDetail: (id: string) => apiRequest(`/super-admin/users/${id}`),
   updateSubscription: (id: string, plan: string, status: string) =>
     apiRequest(`/super-admin/users/${id}/subscription`, {
       method: 'PUT',
       body: JSON.stringify({ plan, status }),
     }),
+  updateRole: (id: string, role: string) =>
+    apiRequest(`/super-admin/users/${id}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    }),
+  deleteUser: (id: string) =>
+    apiRequest(`/super-admin/users/${id}`, { method: 'DELETE' }),
+  getCalls: () => apiRequest('/super-admin/calls'),
+};
+
+// ─── CRM (Leads & Tickets) ───────────────────────────────────────────────────
+
+export const crmApi = {
+  getLeads: () => apiRequest('/crm/leads'),
+  createLead: (data: any) => apiRequest('/crm/leads', { method: 'POST', body: JSON.stringify(data) }),
+  
+  getTickets: () => apiRequest('/crm/tickets'),
+  createTicket: (data: any) => apiRequest('/crm/tickets', { method: 'POST', body: JSON.stringify(data) }),
 };

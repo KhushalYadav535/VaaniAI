@@ -9,8 +9,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { mockAgents } from '@/lib/mock-data'
+import { agentsApi } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
+import { RotateCcw } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 
 interface AgentSelectorProps {
@@ -24,7 +26,17 @@ export function AgentSelector({
   onSelect,
   onReset,
 }: AgentSelectorProps) {
-  const selectedAgent = mockAgents.find(a => a.id === selectedAgentId)
+  const [agents, setAgents] = useState<any[]>([])
+
+  useEffect(() => {
+    agentsApi.getAll().then((res: any) => {
+      if (res && res.agents) {
+        setAgents(res.agents)
+      }
+    }).catch(console.error)
+  }, [])
+
+  const selectedAgent = agents.find(a => a._id === selectedAgentId || a.id === selectedAgentId)
 
   return (
     <Card className="bg-slate-900/50 border-slate-800 p-6">
@@ -38,8 +50,8 @@ export function AgentSelector({
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-slate-900 border-slate-800">
-              {mockAgents.map((agent) => (
-                <SelectItem key={agent.id} value={agent.id}>
+              {agents.map((agent) => (
+                <SelectItem key={agent._id} value={agent._id}>
                   {agent.name}
                 </SelectItem>
               ))}
@@ -66,15 +78,15 @@ export function AgentSelector({
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-xs text-slate-400 uppercase">LLM</span>
-                <span className="text-sm text-slate-300">{selectedAgent.llm.provider}</span>
+                <span className="text-sm text-slate-300">{selectedAgent.llm?.provider || 'groq'}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-slate-400 uppercase">Voice</span>
-                <span className="text-sm text-slate-300">{selectedAgent.voice.provider}</span>
+                <span className="text-sm text-slate-300">{selectedAgent.voice?.provider || 'edge-tts'}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-slate-400 uppercase">Temperature</span>
-                <span className="text-sm text-slate-300">{selectedAgent.temperature.toFixed(2)}</span>
+                <span className="text-sm text-slate-300">{selectedAgent.temperature?.toFixed(2) || '0.70'}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-slate-400 uppercase">Status</span>

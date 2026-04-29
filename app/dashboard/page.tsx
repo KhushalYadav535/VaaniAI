@@ -22,6 +22,11 @@ export default function DashboardPage() {
     }
     try {
       const u = JSON.parse(user)
+      // Super admin should never see the customer dashboard
+      if (u?.role === 'super_admin') {
+        router.replace('/super-admin')
+        return
+      }
       if (u?.name) setUserName(u.name.split(' ')[0])
     } catch {}
   }, [router])

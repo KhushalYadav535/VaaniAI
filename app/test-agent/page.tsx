@@ -44,6 +44,8 @@ const STATUS_COLORS: Record<SessionStatus, string> = {
   ended: 'bg-red-400',
 }
 
+const MIC_CHUNK_MS = Number(process.env.NEXT_PUBLIC_MIC_CHUNK_MS || 1000)
+
 export default function TestAgentPage() {
   const router = useRouter()
   // Add UseSearchParams
@@ -67,9 +69,12 @@ export default function TestAgentPage() {
   const [isSimulating, setIsSimulating] = useState(false)
   const simulationQueueRef = useRef<string[]>([])
   const isAgentSpeakingRef = useRef(false)
+  const lastAudioChunkSentAtRef = useRef<number | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const micContextRef = useRef<AudioContext | null>(null)  // Separate context for mic capture
+  const micStreamRef = useRef<MediaStream | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null)
   const audioChunksBufferRef = useRef<ArrayBuffer[]>([]) // Accumulate decoded ArrayBuffers
@@ -109,13 +114,31 @@ export default function TestAgentPage() {
 
   const cleanup = () => {
     if (wsRef.current) { wsRef.current.close(); wsRef.current = null }
-    if (mediaRecorderRef.current) { mediaRecorderRef.current.stop() }
+    // Stop mic capture
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(t => t.stop())
+      micStreamRef.current = null
+    }
+    if (micContextRef.current && micContextRef.current.state !== 'closed') {
+      micContextRef.current.close().catch(() => {})
+      micContextRef.current = null
+    }
+    if (mediaRecorderRef.current) {
+      try { mediaRecorderRef.current.stop() } catch (e) {}
+      mediaRecorderRef.current = null
+    }
     if (callTimerRef.current) clearInterval(callTimerRef.current)
-    if (audioContextRef.current) audioContextRef.current.close()
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().catch(() => {})
+    }
+    audioContextRef.current = null
     if (ambientAudioRef.current) {
       ambientAudioRef.current.pause()
       ambientAudioRef.current = null
     }
+    audioChunksBufferRef.current = []
+    playbackQueueRef.current = []
+    isPlayingRef.current = false
   }
 
   const startCall = async () => {
@@ -124,16 +147,32 @@ export default function TestAgentPage() {
     setMessages([])
     setCallDuration(0)
 
+    // Pre-create AudioContext on user gesture to unlock browser autoplay policy
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      audioContextRef.current = new AudioContext()
+    }
+    if (audioContextRef.current.state === 'suspended') {
+      await audioContextRef.current.resume()
+    }
+
     const token = localStorage.getItem('token')
     if (!token) { router.push('/auth/login'); return }
 
-    const ws = createVoiceSession(selectedAgentId)
+    const ws = createVoiceSession(selectedAgentId, { preferBinaryAudio: true })
     wsRef.current = ws
 
     ws.onmessage = (event) => {
       try {
-        const msg = JSON.parse(event.data)
-        handleWsMessage(msg)
+        if (typeof event.data === 'string') {
+          const msg = JSON.parse(event.data)
+          handleWsMessage(msg)
+        } else if (event.data instanceof ArrayBuffer) {
+          audioChunksBufferRef.current.push(event.data)
+        } else if (event.data instanceof Blob) {
+          event.data.arrayBuffer().then((buf) => {
+            audioChunksBufferRef.current.push(buf)
+          }).catch((e) => console.error('Binary audio parse error', e))
+        }
       } catch (e) {
         console.error('WS parse error', e)
       }
@@ -307,12 +346,15 @@ export default function TestAgentPage() {
         break
         
       case 'interrupt':
-        audioChunksBufferRef.current = [] 
+        // Clear audio queue without closing AudioContext (closing causes InvalidStateError)
+        audioChunksBufferRef.current = []
         playbackQueueRef.current = []
         isPlayingRef.current = false
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-          audioContextRef.current.close().catch(() => {});
-          audioContextRef.current = null;
+        // Suspend context briefly to stop any playing source nodes
+        if (audioContextRef.current && audioContextRef.current.state === 'running') {
+          audioContextRef.current.suspend().then(() => {
+            audioContextRef.current?.resume().catch(() => {})
+          }).catch(() => {})
         }
         setStatusText('Agent interrupted');
         setStatus('listening')
@@ -327,13 +369,29 @@ export default function TestAgentPage() {
           ])
         }
         break
+
+      case 'latency_metrics':
+        if (msg.metrics) {
+          const firstText = msg.metrics.stt_to_first_text_ms
+          const firstAudio = msg.metrics.stt_to_first_audio_ms
+          console.debug('[latency]', msg.stage, msg.metrics)
+          if (firstText || firstAudio) {
+            setStatusText(`⚡ First text: ${firstText ?? '-'}ms | First audio: ${firstAudio ?? '-'}ms`)
+          }
+        }
+        break
     }
   }
 
   const decodeAndQueueAudio = async (arrayBuffer: ArrayBuffer) => {
     try {
+      // Create AudioContext if needed (lazy init for browser autoplay policy)
       if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
         audioContextRef.current = new AudioContext()
+      }
+      // Resume if suspended (browser autoplay policy pauses it)
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume()
       }
 
       const decoded = await audioContextRef.current.decodeAudioData(arrayBuffer)
@@ -379,35 +437,81 @@ export default function TestAgentPage() {
 
   const startMicRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } })
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })
-      mediaRecorderRef.current = mediaRecorder
+      // echoCancellation prevents agent's TTS audio from feeding back into mic
+      // This is CRITICAL — without it, Deepgram hears both the agent and user simultaneously
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      })
+      micStreamRef.current = stream
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0 && wsRef.current?.readyState === WebSocket.OPEN) {
-          const reader = new FileReader()
-          reader.onloadend = () => {
-            const base64 = (reader.result as string).split(',')[1]
-            wsRef.current?.send(JSON.stringify({ type: 'audio', data: base64 }))
-          }
-          reader.readAsDataURL(e.data)
-        }
+      // Use native AudioContext sample rate (Chrome ignores requested sampleRate constraint)
+      // Do NOT force 16000 - it gets ignored and causes mismatch with Deepgram config
+      const micCtx = new AudioContext()
+      micContextRef.current = micCtx
+
+      // Resume context (needed if created outside user gesture scope)
+      if (micCtx.state === 'suspended') {
+        await micCtx.resume()
       }
 
-      mediaRecorder.start(1000) // Chunk every 1 second to avoid WebM header fragmentation
+      const actualSampleRate = micCtx.sampleRate
+      console.log('[MIC] AudioContext sample rate:', actualSampleRate)
+
+      // Notify backend of actual sample rate so Deepgram can be configured correctly
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'mic_config', sampleRate: actualSampleRate, encoding: 'linear16', channels: 1 }))
+      }
+
+      const source = micCtx.createMediaStreamSource(stream)
+      // bufferSize=4096: ~85ms at 48000Hz — good latency/overhead balance
+      const processor = micCtx.createScriptProcessor(4096, 1, 1)
+
+      processor.onaudioprocess = (event) => {
+        if (wsRef.current?.readyState !== WebSocket.OPEN) return
+        const inputData = event.inputBuffer.getChannelData(0) // Float32Array
+        // Convert Float32 → Int16 (linear16 PCM)
+        const int16 = new Int16Array(inputData.length)
+        for (let i = 0; i < inputData.length; i++) {
+          const clamped = Math.max(-1, Math.min(1, inputData[i]))
+          int16[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7FFF
+        }
+        wsRef.current.send(int16.buffer)
+      }
+
+      source.connect(processor)
+      // Connect through a SILENT gain node (gain=0) instead of directly to destination.
+      // Chrome requires connection to destination for onaudioprocess to fire,
+      // but connecting directly causes mic echo (agent voice plays back through speakers
+      // and gets picked up by mic again, confusing Deepgram's VAD).
+      const silentNode = micCtx.createGain()
+      silentNode.gain.value = 0
+      processor.connect(silentNode)
+      silentNode.connect(micCtx.destination)
+
       setIsRecording(true)
       setStatus('listening')
       setIsMicOn(true)
+      console.log('[MIC] Recording started at', actualSampleRate, 'Hz with echo cancellation')
     } catch (err) {
       console.error(err);
       setStatusText('⚠️ Microphone access denied. Please allow microphone access.')
     }
   }
 
+
   const stopMicRecording = () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop()
-      mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop())
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(t => t.stop())
+      micStreamRef.current = null
+    }
+    if (micContextRef.current && micContextRef.current.state !== 'closed') {
+      micContextRef.current.close().catch(() => {})
+      micContextRef.current = null
     }
     setIsRecording(false)
     setIsMicOn(false)

@@ -21,10 +21,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <div suppressHydrationWarning>{children}</div>;
   }
 
-  const isAuthPage = AUTH_PAGES.includes(pathname) || pathname.startsWith('/auth/');
+  const isAuthPage = AUTH_PAGES.includes(pathname) || pathname.startsWith('/auth/') || pathname.startsWith('/widget');
 
   if (isAuthPage) {
     return <>{children}</>;
+  }
+
+  // Routes that super_admin is allowed to visit
+  const SUPER_ADMIN_ALLOWED = ['/super-admin', '/settings'];
+  const user = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}') } catch { return {} } })();
+  if (user?.role === 'super_admin' && !SUPER_ADMIN_ALLOWED.some(p => pathname.startsWith(p))) {
+    router.replace('/super-admin');
+    return <div suppressHydrationWarning>{children}</div>;
   }
 
   return (

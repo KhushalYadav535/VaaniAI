@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { settingsApi } from '@/lib/api'
 import {
   Check, X, Eye, EyeOff, Key, Cpu, Mic,
-  Phone, Settings, Loader2, ExternalLink
+  Phone, Settings, Loader2, ExternalLink, Webhook, Copy, FlaskConical
 } from 'lucide-react'
 
 interface SettingsState {
@@ -20,6 +20,8 @@ interface SettingsState {
   twilioPhoneNumber: string
   preferredLlm: string
   preferredTts: string
+  postCallWebhookUrl: string
+  webhookSecret: string
 }
 
 export default function SettingsPage() {
@@ -28,6 +30,7 @@ export default function SettingsPage() {
     deepgramKey: '', elevenLabsKey: '',
     twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
     preferredLlm: 'groq', preferredTts: 'edge-tts',
+    postCallWebhookUrl: '', webhookSecret: '',
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -36,6 +39,9 @@ export default function SettingsPage() {
   const [testResults, setTestResults] = useState<Record<string, boolean | null>>({})
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [activeTab, setActiveTab] = useState('llm')
+  const [webhookCopied, setWebhookCopied] = useState(false)
+  const [testingWebhook, setTestingWebhook] = useState(false)
+  const [webhookTestResult, setWebhookTestResult] = useState<null | 'ok' | 'fail'>(null)
 
   useEffect(() => {
     loadSettings()
@@ -88,12 +94,74 @@ export default function SettingsPage() {
   const toggleShow = (key: string) =>
     setShowKeys(prev => ({ ...prev, [key]: !prev[key] }))
 
+  const samplePayloadPreview = {
+    event: 'call.ended',
+    timestamp: new Date().toISOString(),
+    call: { id: 'abc123', direction: 'web', durationSeconds: 120 },
+    agent: { name: 'Sales Agent', language: 'en' },
+    customer: { phone: '+91 9876543210', name: 'Rajesh Kumar', email: 'rajesh@example.com' },
+    transcript: [
+      { role: 'assistant', message: 'Hello! How can I help you?' },
+      { role: 'user', message: 'I want to know about pricing.' },
+    ],
+    analysis: {
+      summary: 'Customer asked about pricing plans.',
+      sentiment: 'positive', emotion: 'happy',
+      topics: ['pricing', 'product inquiry'], customerIntent: 'purchase',
+      urgencyLevel: 'low', followUpRequired: true,
+      actionItems: ['Send pricing brochure'],
+    },
+    extractedData: { name: 'Rajesh Kumar', email: 'rajesh@example.com', phone: '+91 9876543210' },
+    metrics: { qaScore: 92, nps: 8, csat: 4 },
+  }
+
   const tabs = [
     { id: 'llm', label: 'LLM Providers', icon: Cpu },
     { id: 'stt', label: 'Speech (STT)', icon: Mic },
     { id: 'tts', label: 'Voice (TTS)', icon: Settings },
     { id: 'telephony', label: 'Telephony', icon: Phone },
+    { id: 'integrations', label: 'Integrations', icon: Webhook },
   ]
+
+  const testWebhook = async () => {
+    if (!settings.postCallWebhookUrl) return
+    setTestingWebhook(true)
+    setWebhookTestResult(null)
+    try {
+      const samplePayload = {
+        event: 'call.ended',
+        timestamp: new Date().toISOString(),
+        call: { id: 'test-call-id', direction: 'web', durationSeconds: 120 },
+        agent: { name: 'Test Agent', language: 'en' },
+        customer: { phone: '+91 9876543210', name: 'Test Customer' },
+        transcript: [
+          { role: 'assistant', message: 'Hello! How can I help you?' },
+          { role: 'user', message: 'I need information about your product.' },
+        ],
+        analysis: {
+          summary: 'Customer inquired about product details. Follow-up required.',
+          sentiment: 'positive', emotion: 'happy',
+          topics: ['product inquiry'], customerIntent: 'purchase',
+          urgencyLevel: 'low', followUpRequired: true,
+          actionItems: ['Send product brochure'],
+        },
+        extractedData: { name: 'Test Customer', phone: '+91 9876543210' },
+        metrics: { qaScore: 90, nps: 8, csat: 4 },
+      }
+      const res = await fetch(settings.postCallWebhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'VaaniAI-Webhook/1.0' },
+        body: JSON.stringify(samplePayload),
+        signal: AbortSignal.timeout(8000),
+      })
+      setWebhookTestResult(res.ok || res.status < 500 ? 'ok' : 'fail')
+    } catch {
+      setWebhookTestResult('fail')
+    } finally {
+      setTestingWebhook(false)
+    }
+  }
+
 
   const KeyInput = ({ label, keyName, placeholder, helpText, freeTag, link, testable }: {
     label: string; keyName: keyof SettingsState; placeholder: string;
@@ -293,6 +361,117 @@ export default function SettingsPage() {
                   />
                 </div>
                 <p className="text-xs font-light text-slate-500">Your Twilio phone number in E.164 format</p>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'integrations' && (
+            <>
+              <div className="flex items-center gap-2 mb-4">
+                <Webhook className="w-5 h-5 text-purple-600" />
+                <h2 className="text-lg font-thin text-slate-900 dark:text-white">Webhook Integrations</h2>
+              </div>
+
+              {/* Info Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border border-violet-200/50 dark:border-violet-800/50">
+                <p className="text-sm font-light text-violet-700 dark:text-violet-300">
+                  🔗 <strong>Post-Call Webhook</strong> — After every call ends, VaaniAI automatically sends the full call data (transcript, summary, leads, sentiment, extracted info) to your URL.
+                  Connect to <strong>n8n</strong>, <strong>Zapier</strong>, <strong>Make.com</strong>, or your own backend.
+                </p>
+              </div>
+
+              {/* Webhook URL */}
+              <div className="space-y-2">
+                <label className="text-sm font-light text-slate-700 dark:text-slate-300">Webhook URL (n8n / Zapier / Custom)</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Webhook className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input
+                      type="url"
+                      placeholder="https://your-n8n.com/webhook/vaaniai-calls"
+                      value={settings.postCallWebhookUrl}
+                      onChange={e => update('postCallWebhookUrl' as any, e.target.value)}
+                      className="pl-10 h-10 bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 rounded-2xl font-light text-sm"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={testWebhook}
+                    disabled={!settings.postCallWebhookUrl || testingWebhook}
+                    className="h-10 px-4 rounded-2xl border-slate-200/50 dark:border-slate-700/50 text-xs font-light"
+                  >
+                    {testingWebhook ? <Loader2 className="w-4 h-4 animate-spin" /> :
+                      webhookTestResult === 'ok' ? <Check className="w-4 h-4 text-green-500" /> :
+                      webhookTestResult === 'fail' ? <X className="w-4 h-4 text-red-500" /> :
+                      <><FlaskConical className="w-4 h-4 mr-1" /> Test</>}
+                  </Button>
+                </div>
+                {webhookTestResult === 'ok' && <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1"><Check className="w-3 h-3" /> Webhook reachable! Sample payload sent.</p>}
+                {webhookTestResult === 'fail' && <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1"><X className="w-3 h-3" /> Could not reach URL. Check if n8n is running and the URL is correct.</p>}
+                <p className="text-xs font-light text-slate-500">VaaniAI will POST to this URL after every call. The Test button sends a sample payload.</p>
+              </div>
+
+              {/* Webhook Secret */}
+              <div className="space-y-2">
+                <label className="text-sm font-light text-slate-700 dark:text-slate-300">Webhook Secret (Optional)</label>
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    type={showKeys['webhookSecret'] ? 'text' : 'password'}
+                    placeholder="your-secret-key"
+                    value={settings.webhookSecret}
+                    onChange={e => update('webhookSecret' as any, e.target.value)}
+                    className="pl-10 pr-10 h-10 bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 rounded-2xl font-light text-sm"
+                  />
+                  <button onClick={() => toggleShow('webhookSecret')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showKeys['webhookSecret'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-xs font-light text-slate-500">If set, every request will include a <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">X-VaaniAI-Signature</code> HMAC-SHA256 header for verification in n8n.</p>
+              </div>
+
+              {/* Sample Payload Preview */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-light text-slate-700 dark:text-slate-300">📦 Sample Payload Structure</label>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(samplePayloadPreview, null, 2))
+                      setWebhookCopied(true)
+                      setTimeout(() => setWebhookCopied(false), 2000)
+                    }}
+                    className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:underline"
+                  >
+                    {webhookCopied ? <><Check className="w-3 h-3" /> Copied!</> : <><Copy className="w-3 h-3" /> Copy JSON</>}
+                  </button>
+                </div>
+                <pre className="text-xs bg-slate-900 dark:bg-black text-green-400 p-4 rounded-2xl overflow-x-auto font-mono leading-relaxed border border-slate-800 max-h-72 overflow-y-auto">
+{`{
+  "event": "call.ended",
+  "timestamp": "2026-04-28T09:00:00Z",
+  "call": { "id": "...", "direction": "web", "durationSeconds": 120 },
+  "agent": { "name": "Sales Agent", "language": "en" },
+  "customer": { "phone": "+91 9876543210", "name": "Rajesh Kumar", "email": "rajesh@example.com" },
+  "transcript": [
+    { "role": "assistant", "message": "Hello! How can I help?" },
+    { "role": "user",      "message": "I want to know about pricing." }
+  ],
+  "analysis": {
+    "summary": "Customer asked about pricing plans.",
+    "sentiment": "positive",
+    "emotion": "happy",
+    "topics": ["pricing", "product inquiry"],
+    "customerIntent": "purchase",
+    "urgencyLevel": "low",
+    "followUpRequired": true,
+    "actionItems": ["Send pricing brochure"]
+  },
+  "extractedData": { "name": "Rajesh Kumar", "email": "rajesh@example.com", "phone": "+91 9876543210" },
+  "metrics": { "qaScore": 92, "nps": 8, "csat": 4 }
+}`}
+                </pre>
               </div>
             </>
           )}

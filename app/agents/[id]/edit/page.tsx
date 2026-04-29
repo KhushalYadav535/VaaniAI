@@ -52,6 +52,7 @@ export default function EditAgentPage() {
         voice: {
           provider: formData.voiceProvider,
           voiceId: formData.voiceId || agent?.voice?.voiceId || 'en-US-JennyNeural',
+          speed: formData.voiceSpeed,
         },
         llm: {
           provider: formData.llmProvider,
@@ -74,9 +75,6 @@ export default function EditAgentPage() {
           backgroundDenoising: formData.backgroundDenoising,
           fillerWords: formData.fillerWords,
           ambientNoise: formData.ambientNoise,
-        },
-        voice: {
-          speed: formData.voiceSpeed,
         }
       })
       router.push('/agents')
@@ -119,7 +117,7 @@ export default function EditAgentPage() {
             {agent && (
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button className="bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 rounded-full px-6 font-light shadow-lg">
+                  <Button className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 rounded-full px-6 font-light shadow-lg">
                     <Code2 className="w-4 h-4 mr-2" />
                     Embed Widget
                   </Button>

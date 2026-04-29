@@ -38,38 +38,6 @@ const webhookEvents = [
   { id: 'error.occurred', name: 'Error Occurred', description: 'When system errors happen' },
 ]
 
-const mockWebhooks = [
-  {
-    id: '1',
-    name: 'CRM Integration',
-    url: 'https://api.mycompany.com/webhooks/voiceagent',
-    events: ['call.started', 'call.ended', 'call.transcript'],
-    secret: 'whsec_1234567890abcdef',
-    active: true,
-    lastTriggered: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    successRate: 98.5,
-  },
-  {
-    id: '2',
-    name: 'Analytics Pipeline',
-    url: 'https://analytics.myapp.com/webhooks',
-    events: ['call.ended', 'call.transcript'],
-    secret: 'whsec_fedcba0987654321',
-    active: true,
-    lastTriggered: new Date(Date.now() - 30 * 60 * 1000),
-    successRate: 99.2,
-  },
-  {
-    id: '3',
-    name: 'Slack Notifications',
-    url: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX',
-    events: ['error.occurred', 'payment.failed'],
-    secret: 'whsec_slack_secret_key',
-    active: false,
-    lastTriggered: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    successRate: 95.0,
-  },
-]
 
 export default function WebhooksPage() {
   const [webhooks, setWebhooks] = useState<any[]>([])

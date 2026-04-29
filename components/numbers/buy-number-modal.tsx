@@ -19,7 +19,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { mockAgents } from '@/lib/mock-data'
+import { agentsApi } from '@/lib/api'
+import { useEffect, useState } from 'react'
 
 const buyNumberSchema = z.object({
   country: z.string().min(1, 'Country is required'),
@@ -73,6 +74,18 @@ export function BuyNumberModal({
       country: 'United States',
     },
   })
+
+  const [agents, setAgents] = useState<any[]>([])
+
+  useEffect(() => {
+    if (open) {
+      agentsApi.getAll().then((res: any) => {
+        if (res && res.agents) {
+          setAgents(res.agents)
+        }
+      }).catch(console.error)
+    }
+  }, [open])
 
   const country = watch('country')
   const type = watch('type')
@@ -163,8 +176,8 @@ export function BuyNumberModal({
               </SelectTrigger>
               <SelectContent className="bg-slate-900 border-slate-800">
                 <SelectItem value="">No agent</SelectItem>
-                {mockAgents.map((agent) => (
-                  <SelectItem key={agent.id} value={agent.id}>
+                {agents.map((agent) => (
+                  <SelectItem key={agent._id} value={agent._id}>
                     {agent.name}
                   </SelectItem>
                 ))}

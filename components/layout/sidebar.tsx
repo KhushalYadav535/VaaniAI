@@ -17,7 +17,11 @@ import {
   X,
   LogOut,
   Megaphone,
-  MessageCircle
+  MessageCircle,
+  Activity,
+  Code,
+  Users,
+  LibraryBig
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -25,9 +29,11 @@ import { useAuth } from '@/components/providers/auth-provider'
 
 import { BookOpen } from 'lucide-react'
 
-const navigation = [
+const customerNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Agents', href: '/agents', icon: Zap },
+  { name: 'Agent Templates', href: '/agent-templates', icon: LibraryBig },
+  { name: 'CRM & Leads', href: '/crm', icon: Users },
   { name: 'Call Flows', href: '/call-flows', icon: GitBranch },
   { name: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen },
   { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
@@ -35,9 +41,16 @@ const navigation = [
   { name: 'Call Logs', href: '/logs', icon: History },
   { name: 'Chats', href: '/chats', icon: MessageCircle },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Active Calls', href: '/active-calls', icon: Activity },
   { name: 'Voice Settings', href: '/voice-settings', icon: Mic },
   { name: 'Webhooks', href: '/webhooks', icon: Webhook },
+  { name: 'Web Widget', href: '/web-widget', icon: Code },
   { name: 'Test Agent', href: '/test-agent', icon: Microscope },
+  { name: 'Settings', href: '/settings', icon: Settings },
+]
+
+const superAdminNavigation = [
+  { name: 'Platform Overview', href: '/super-admin', icon: LayoutDashboard },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
@@ -76,18 +89,13 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-0.5 p-3 overflow-y-auto">
-          {(() => {
-            let currentNav = [...navigation];
-            if (user?.role === 'super_admin') {
-              currentNav.unshift({ name: 'Super Admin Dashboard', href: '/super-admin', icon: LayoutDashboard });
-            }
-            return currentNav.map((item) => {
-              const isActive = pathname === item.href
-              const Icon = item.icon
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
+          {(user?.role === 'super_admin' ? superAdminNavigation : customerNavigation).map((item) => {
+            const isActive = pathname === item.href
+            const Icon = item.icon
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
                 onClick={() => setIsOpen(false)}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm font-light',
@@ -99,9 +107,8 @@ export function Sidebar() {
                 <Icon size={18} className={isActive ? 'text-purple-600 dark:text-purple-400' : ''} />
                 <span>{item.name}</span>
               </Link>
-              )
-            })
-          })()}
+            )
+          })}
         </nav>
 
         {/* User section */}

@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NumbersTable } from '@/components/numbers/numbers-table'
 import { BuyNumberModal } from '@/components/numbers/buy-number-modal'
-import { mockAgents } from '@/lib/mock-data'
+import { numbersApi } from '@/lib/api'
 import { PhoneNumber } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Plus, Search } from 'lucide-react'
@@ -13,35 +13,83 @@ export default function NumbersPage() {
   const [numbers, setNumbers] = useState<PhoneNumber[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isBuyOpen, setIsBuyOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchNumbers()
+  }, [])
+
+  const fetchNumbers = async () => {
+    try {
+      const res: any = await numbersApi.getAll()
+      if (res && res.numbers) {
+        // Map backend format to frontend format
+        const formatted = res.numbers.map((n: any) => ({
+          ...n,
+          id: n._id,
+          assignedAgent: n.assignedAgent ? {
+            id: n.assignedAgent._id,
+            name: n.assignedAgent.name,
+          } : undefined
+        }))
+        setNumbers(formatted)
+      }
+    } catch (e) {
+      console.error('Failed to fetch numbers', e)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredNumbers = numbers.filter(number =>
     number.number.includes(searchQuery) || number.country.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const handleBuyNumber = (data: any) => {
-    const newNumber: PhoneNumber = {
-      id: String(numbers.length + 1),
-      number: data.selectedNumber,
-      country: data.country,
-      type: data.type,
-      assignedAgent: data.agentId ? {
-        id: data.agentId,
-        name: mockAgents.find(a => a.id === data.agentId)?.name || '',
-      } : undefined,
-      status: 'active',
-      monthlyCost: data.type === 'toll-free' ? 1500 : 1000,
-      createdAt: new Date(),
+  const handleBuyNumber = async (data: any) => {
+    try {
+      await numbersApi.create({
+        number: data.selectedNumber,
+        country: data.country,
+        type: data.type,
+        provider: 'twilio',
+        monthlyCost: data.type === 'toll-free' ? 1500 : 1000,
+      })
+      if (data.agentId) {
+        // We need the ID of the newly created number. Fetching all is easiest.
+        await fetchNumbers()
+        const latestNum: any = await numbersApi.getAll()
+        const newNum = latestNum.numbers.find((n: any) => n.number === data.selectedNumber)
+        if (newNum) {
+          await numbersApi.assignAgent(newNum._id, data.agentId)
+        }
+      }
+      await fetchNumbers()
+      setIsBuyOpen(false)
+    } catch (e) {
+      alert('Failed to purchase number')
     }
-    setNumbers([...numbers, newNumber])
-    setIsBuyOpen(false)
   }
 
-  const handleDeleteNumber = (id: string) => {
-    setNumbers(numbers.filter(n => n.id !== id))
+  const handleDeleteNumber = async (id: string) => {
+    try {
+      await numbersApi.delete(id)
+      await fetchNumbers()
+    } catch (e) {
+      alert('Failed to delete number')
+    }
   }
 
-  const handleUpdateNumber = (id: string, updates: Partial<PhoneNumber>) => {
-    setNumbers(numbers.map(n => n.id === id ? { ...n, ...updates } : n))
+  const handleUpdateNumber = async (id: string, updates: Partial<PhoneNumber>) => {
+    try {
+      if ('assignedAgent' in updates) {
+        await numbersApi.assignAgent(id, updates.assignedAgent?.id || null)
+      } else {
+        await numbersApi.update(id, updates)
+      }
+      await fetchNumbers()
+    } catch (e) {
+      alert('Failed to update number')
+    }
   }
 
   return (
