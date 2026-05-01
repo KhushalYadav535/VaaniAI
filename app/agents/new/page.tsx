@@ -6,8 +6,9 @@ import { ArrowLeft, Sparkles, Terminal } from 'lucide-react'
 import { getTemplateById } from '@/lib/agentTemplates'
 import { agentsApi } from '@/lib/api'
 import toast from 'react-hot-toast'
+import { Suspense } from 'react'
 
-export default function CreateAgentPage() {
+function CreateAgentContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   // Compute template data synchronously so the form never mounts with empty defaults
@@ -167,5 +168,17 @@ export default function CreateAgentPage() {
         
       </div>
     </div>
+  )
+}
+
+export default function CreateAgentPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 dark:bg-[#020617] p-6 md:p-12 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
+      </div>
+    }>
+      <CreateAgentContent />
+    </Suspense>
   )
 }
