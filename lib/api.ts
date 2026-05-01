@@ -87,6 +87,9 @@ export const agentsApi = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+
+  duplicate: (id: string) =>
+    apiRequest(`/agents/${id}/duplicate`, { method: 'POST' }),
 };
 
 // ─── Phone Numbers ───────────────────────────────────────────────────────────
@@ -242,6 +245,11 @@ export const webhooksApi = {
 
   test: (id: string) =>
     apiRequest(`/webhooks/${id}/test`, { method: 'POST' }),
+
+  getLogs: () => apiRequest('/webhooks/logs'),
+
+  getLogsByWebhook: (id: string) =>
+    apiRequest(`/webhooks/${id}/logs`),
 };
 
 // ─── Public ──────────────────────────────────────────────────────────────────
@@ -330,7 +338,11 @@ export const superAdminApi = {
 export const crmApi = {
   getLeads: () => apiRequest('/crm/leads'),
   createLead: (data: any) => apiRequest('/crm/leads', { method: 'POST', body: JSON.stringify(data) }),
+  updateLead: (id: string, data: any) => apiRequest(`/crm/leads/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteLead: (id: string) => apiRequest(`/crm/leads/${id}`, { method: 'DELETE' }),
   
   getTickets: () => apiRequest('/crm/tickets'),
   createTicket: (data: any) => apiRequest('/crm/tickets', { method: 'POST', body: JSON.stringify(data) }),
+  updateTicket: (id: string, data: any) => apiRequest(`/crm/tickets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTicket: (id: string) => apiRequest(`/crm/tickets/${id}`, { method: 'DELETE' }),
 };

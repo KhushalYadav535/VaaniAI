@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card } from '@/components/ui/card'
 import { callsApi } from '@/lib/api'
 import { Phone, Clock, CheckCircle, XCircle, Activity, Loader2, ArrowUpRight, ArrowDownLeft, Globe } from 'lucide-react'
 
@@ -19,20 +18,20 @@ interface CallLog {
 const getStatusConfig = (status: string) => {
   switch (status) {
     case 'completed':
-      return { color: 'text-green-600 dark:text-green-400', bg: 'bg-green-500/10 border-green-500/30', icon: CheckCircle, dot: 'bg-green-500' }
+      return { color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200/60 dark:border-emerald-500/20', dot: 'bg-emerald-500' }
     case 'failed':
-      return { color: 'text-red-600 dark:text-red-400', bg: 'bg-red-500/10 border-red-500/30', icon: XCircle, dot: 'bg-red-500' }
+      return { color: 'text-red-700 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-500/10 border-red-200/60 dark:border-red-500/20', dot: 'bg-red-500' }
     case 'ongoing':
-      return { color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30', icon: Activity, dot: 'bg-blue-500 animate-pulse' }
+      return { color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-500/10 border-blue-200/60 dark:border-blue-500/20', dot: 'bg-blue-500 animate-pulse' }
     default:
-      return { color: 'text-slate-500', bg: 'bg-slate-500/10 border-slate-500/30', icon: Clock, dot: 'bg-slate-400' }
+      return { color: 'text-slate-600 dark:text-slate-400', bg: 'bg-slate-50 dark:bg-slate-500/10 border-slate-200/60 dark:border-slate-500/20', dot: 'bg-slate-400' }
   }
 }
 
-const getDirectionIcon = (dir: string) => {
-  if (dir === 'inbound') return <ArrowDownLeft className="w-3 h-3 text-green-500" />
-  if (dir === 'outbound') return <ArrowUpRight className="w-3 h-3 text-blue-500" />
-  return <Globe className="w-3 h-3 text-purple-500" />
+const getDirectionBadge = (dir: string) => {
+  if (dir === 'inbound') return { icon: <ArrowDownLeft className="w-3 h-3" />, cls: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' }
+  if (dir === 'outbound') return { icon: <ArrowUpRight className="w-3 h-3" />, cls: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10' }
+  return { icon: <Globe className="w-3 h-3" />, cls: 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10' }
 }
 
 const formatDuration = (s: number) => {
@@ -65,94 +64,89 @@ export function RecentCallsTable() {
   }
 
   return (
-    <div className="relative group">
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-600/5 to-pink-600/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-all duration-300 blur-xl" />
-      <Card className="relative bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 rounded-3xl p-6 hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-purple-600 flex items-center justify-center shadow-lg">
-            <Phone className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h2 className="text-lg font-thin text-slate-900 dark:text-white">Recent Calls</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-light">Latest call activities</p>
-          </div>
-          {!loading && (
-            <div className="ml-auto flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs text-slate-400 font-light">Live</span>
-            </div>
-          )}
+    <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white/80 dark:bg-white/[0.02] backdrop-blur-sm shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-slate-100 dark:border-white/[0.04] flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-500/15 flex items-center justify-center">
+          <Phone className="w-4 h-4 text-violet-600 dark:text-violet-400" />
         </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center h-48">
-            <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
-          </div>
-        ) : calls.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center mx-auto mb-4">
-              <Phone className="w-7 h-7 text-slate-400" />
-            </div>
-            <h3 className="text-base font-thin text-slate-900 dark:text-white mb-1">No calls yet</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-light">Use the Test Agent page to start a call</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-200/30 dark:border-slate-700/30">
-                  <th className="text-left py-3 px-3 text-xs font-light text-slate-500 dark:text-slate-400 uppercase tracking-wider">Agent</th>
-                  <th className="text-left py-3 px-3 text-xs font-light text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:table-cell">Direction</th>
-                  <th className="text-left py-3 px-3 text-xs font-light text-slate-500 dark:text-slate-400 uppercase tracking-wider">Duration</th>
-                  <th className="text-left py-3 px-3 text-xs font-light text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                  <th className="text-left py-3 px-3 text-xs font-light text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden md:table-cell">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {calls.map((call) => {
-                  const config = getStatusConfig(call.status)
-                  const StatusIcon = config.icon
-                  return (
-                    <tr key={call._id} className="border-b border-slate-100/50 dark:border-slate-800/50 hover:bg-purple-50/30 dark:hover:bg-purple-950/20 transition-colors">
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600/20 to-purple-600/20 flex items-center justify-center flex-shrink-0">
-                            <Phone className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                          </div>
-                          <span className="text-sm font-light text-slate-800 dark:text-slate-200 truncate max-w-[120px]">
-                            {call.agentName || 'Unknown Agent'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 hidden sm:table-cell">
-                        <div className="flex items-center gap-1.5">
-                          {getDirectionIcon(call.direction)}
-                          <span className="text-xs font-light text-slate-500 dark:text-slate-400 capitalize">{call.direction}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-slate-400" />
-                          <span className="text-sm font-light text-slate-700 dark:text-slate-300 font-mono">{formatDuration(call.duration)}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-light ${config.bg} ${config.color}`}>
-                          <div className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
-                          <span className="capitalize">{call.status}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 hidden md:table-cell">
-                        <span className="text-xs font-light text-slate-500 dark:text-slate-400">{formatTime(call.startTime)}</span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+        <div className="flex-1">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-white/90">Recent Calls</h2>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">Latest call activity</p>
+        </div>
+        {!loading && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Live</span>
           </div>
         )}
-      </Card>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-52">
+          <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
+        </div>
+      ) : calls.length === 0 ? (
+        <div className="text-center py-16 px-6">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-white/[0.04] flex items-center justify-center mx-auto mb-4">
+            <Phone className="w-6 h-6 text-slate-300 dark:text-slate-600" />
+          </div>
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-white/80 mb-1">No calls yet</h3>
+          <p className="text-[12px] text-slate-400 dark:text-slate-500">Head to Test Agent to make your first call</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50/60 dark:bg-white/[0.01]">
+                <th className="text-left py-2.5 px-5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Agent</th>
+                <th className="text-left py-2.5 px-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest hidden sm:table-cell">Direction</th>
+                <th className="text-left py-2.5 px-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Duration</th>
+                <th className="text-left py-2.5 px-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Status</th>
+                <th className="text-left py-2.5 px-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest hidden md:table-cell">Time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100/80 dark:divide-white/[0.03]">
+              {calls.map((call) => {
+                const config = getStatusConfig(call.status)
+                const dirBadge = getDirectionBadge(call.direction)
+                return (
+                  <tr key={call._id} className="hover:bg-violet-50/30 dark:hover:bg-violet-500/[0.03] transition-colors">
+                    <td className="py-3 px-5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-500/15 flex items-center justify-center flex-shrink-0">
+                          <Phone className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+                        </div>
+                        <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300 truncate max-w-[140px]">
+                          {call.agentName || 'Unknown Agent'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 hidden sm:table-cell">
+                      <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium ${dirBadge.cls}`}>
+                        {dirBadge.icon}
+                        <span className="capitalize">{call.direction}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-[13px] font-mono text-slate-600 dark:text-slate-400 tabular-nums">{formatDuration(call.duration)}</span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold ${config.bg} ${config.color}`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
+                        <span className="capitalize">{call.status}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 hidden md:table-cell">
+                      <span className="text-[12px] text-slate-400 dark:text-slate-500">{formatTime(call.startTime)}</span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

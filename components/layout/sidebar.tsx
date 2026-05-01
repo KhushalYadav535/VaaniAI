@@ -67,7 +67,7 @@ export function Sidebar() {
       {/* Mobile menu button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-lg bg-muted text-foreground hover:bg-muted/80 transition-colors"
+        className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
       >
         {isOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
@@ -75,16 +75,16 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed md:static inset-y-0 left-0 z-40 w-64 bg-card border-r border-border flex flex-col transition-all duration-300 md:translate-x-0',
+          'fixed md:static inset-y-0 left-0 z-40 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300 md:translate-x-0',
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         {/* Logo area */}
-        <div className="h-16 flex items-center gap-3 px-6 border-b border-border/50">
+        <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-100 dark:border-slate-800">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 via-purple-600 to-pink-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
             <Zap size={16} className="text-white" />
           </div>
-          <span className="font-thin text-lg text-foreground tracking-wide">Vaani<span className="font-extralight bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">AI</span></span>
+          <span className="font-thin text-lg text-slate-900 dark:text-white tracking-wide">Vaani<span className="font-extralight bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">AI</span></span>
         </div>
 
         {/* Navigation */}
@@ -98,13 +98,13 @@ export function Sidebar() {
                 href={item.href}
                 onClick={() => setIsOpen(false)}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm font-light',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm font-medium',
                   isActive
-                    ? 'bg-gradient-to-r from-violet-600/20 to-purple-600/20 text-purple-700 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/50'
-                    : 'text-foreground/70 hover:text-foreground hover:bg-muted/50'
+                    ? 'bg-gradient-to-r from-violet-600/20 to-purple-600/20 text-violet-700 dark:text-violet-300 border border-violet-200/50 dark:border-violet-800/50 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                 )}
               >
-                <Icon size={18} className={isActive ? 'text-purple-600 dark:text-purple-400' : ''} />
+                <Icon size={18} className={isActive ? 'text-violet-600 dark:text-violet-400' : ''} />
                 <span>{item.name}</span>
               </Link>
             )
@@ -112,19 +112,19 @@ export function Sidebar() {
         </nav>
 
         {/* User section */}
-        <div className="border-t border-border/50 p-3">
-          <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-muted/30 text-foreground">
+        <div className="border-t border-slate-100 dark:border-slate-800 p-3">
+          <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-600 via-purple-600 to-pink-600 flex items-center justify-center text-xs font-medium text-white flex-shrink-0">
               {initials}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-light truncate text-foreground">{user?.name || 'User'}</div>
-              <div className="text-xs text-foreground/60 font-light truncate">{user?.email || ''}</div>
+              <div className="text-sm font-medium truncate text-slate-900 dark:text-white">{user?.name || 'User'}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email || ''}</div>
             </div>
             <button
               onClick={logout}
               title="Sign out"
-              className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/30 text-foreground/40 hover:text-red-500 transition-all duration-200"
+              className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/30 text-slate-400 dark:text-slate-600 hover:text-red-500 transition-all duration-200"
             >
               <LogOut size={16} />
             </button>

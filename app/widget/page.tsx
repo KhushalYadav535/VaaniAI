@@ -1,80 +1,140 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { agentsApi, createVoiceSession } from '@/lib/api'
-import { Phone, PhoneOff, Mic, MicOff, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Phone, PhoneOff, Mic, Loader2 } from 'lucide-react'
 
 type SessionStatus = 'idle' | 'connecting' | 'ready' | 'listening' | 'processing' | 'speaking' | 'ended'
 
-const MIC_CHUNK_MS = Number(process.env.NEXT_PUBLIC_MIC_CHUNK_MS || 1000)
+const MIC_CHUNK_MS = 1000
 
 export default function WidgetView() {
   const [agentId, setAgentId] = useState<string>('')
   const [agentName, setAgentName] = useState<string>('AI Support')
   const [status, setStatus] = useState<SessionStatus>('idle')
-  const [isMicOn, setIsMicOn] = useState(false)
-  const [isRecording, setIsRecording] = useState(false)
+  const [transcript, setTranscript] = useState<string>('')
+  const [themeColor, setThemeColor] = useState<string>('#8b5cf6')
+  const [isEmbed, setIsEmbed] = useState(false)
+  const [backendUrl, setBackendUrl] = useState<string>('')
+  const [wsUrl, setWsUrl] = useState<string>('')
+  const [widgetToken, setWidgetToken] = useState<string>('')
   
   const wsRef = useRef<WebSocket | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const audioChunksBufferRef = useRef<ArrayBuffer[]>([])
   const playbackQueueRef = useRef<AudioBuffer[]>([])
   const isPlayingRef = useRef(false)
-  const isAgentSpeakingRef = useRef(false)
   const lastAudioChunkSentAtRef = useRef<number | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const id = params.get('agentId')
+    const color = params.get('color')
+    const mode = params.get('mode')
+    const backend = params.get('backend')
+
+    if (color) setThemeColor(decodeURIComponent(color))
+    if (mode === 'embed') setIsEmbed(true)
+
+    // Determine backend URL
+    const resolvedBackend = backend
+      ? decodeURIComponent(backend)
+      : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace('/api', '')
+    
+    setBackendUrl(resolvedBackend + '/api')
+    setWsUrl(resolvedBackend.replace('http', 'ws'))
+
     if (id) {
       setAgentId(id)
-      agentsApi.getById(id).then(res => {
-        if (res.agent) setAgentName(res.agent.name)
-      }).catch(console.error)
+      // Fetch agent config via public widget API
+      fetch(`${resolvedBackend}/api/widget/${id}/config`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.agent) {
+            setAgentName(data.agent.name)
+          }
+        })
+        .catch(console.error)
     }
-    
+
     return () => cleanup()
   }, [])
 
-  const cleanup = () => {
+  const cleanup = useCallback(() => {
     if (wsRef.current) { wsRef.current.close(); wsRef.current = null }
-    if (mediaRecorderRef.current) { mediaRecorderRef.current.stop() }
-    if (audioContextRef.current) audioContextRef.current.close()
-  }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().catch(() => {})
+      audioContextRef.current = null
+    }
+    playbackQueueRef.current = []
+    audioChunksBufferRef.current = []
+    isPlayingRef.current = false
+  }, [])
 
   const startCall = async () => {
-    if (!agentId) return
+    if (!agentId || !backendUrl) return
     setStatus('connecting')
+    setTranscript('')
 
-    const ws = createVoiceSession(agentId, { preferBinaryAudio: true })
-    wsRef.current = ws
+    try {
+      // Get widget session token from backend
+      const sessionRes = await fetch(`${backendUrl}/widget/${agentId}/session`, { method: 'POST' })
+      const sessionData = await sessionRes.json()
 
-    ws.onmessage = (event) => {
-      try {
-        if (typeof event.data === 'string') {
-          const msg = JSON.parse(event.data)
-          handleWsMessage(msg)
-        } else if (event.data instanceof ArrayBuffer) {
-          audioChunksBufferRef.current.push(event.data)
-        } else if (event.data instanceof Blob) {
-          event.data.arrayBuffer().then((buf) => {
-            audioChunksBufferRef.current.push(buf)
-          }).catch((e) => console.error('Binary audio parse error', e))
-        }
-      } catch (e) {
-        console.error('WS parse error', e)
+      if (!sessionData.success) {
+        console.error('Failed to get widget session:', sessionData.message)
+        setStatus('ended')
+        return
       }
-    }
 
-    ws.onerror = () => {
-      setStatus('ended')
-    }
+      const token = sessionData.token
+      setWidgetToken(token)
 
-    ws.onclose = () => {
+      // Connect WebSocket
+      const ws = new WebSocket(`${wsUrl}/ws/voice`)
+      ws.binaryType = 'arraybuffer'
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          type: 'init',
+          agentId,
+          token,
+          preferBinaryAudio: true,
+        }))
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          if (typeof event.data === 'string') {
+            const msg = JSON.parse(event.data)
+            handleWsMessage(msg)
+          } else if (event.data instanceof ArrayBuffer) {
+            audioChunksBufferRef.current.push(event.data)
+          }
+        } catch (e) {
+          console.error('WS parse error', e)
+        }
+      }
+
+      ws.onerror = () => {
+        setStatus('ended')
+      }
+
+      ws.onclose = () => {
+        setStatus('ended')
+      }
+    } catch (err) {
+      console.error('Start call error:', err)
       setStatus('ended')
-      setIsRecording(false)
     }
   }
 
@@ -86,6 +146,9 @@ export default function WidgetView() {
         break
 
       case 'transcript':
+        if (msg.text && msg.text.trim()) {
+          setTranscript(msg.text)
+        }
         if (msg.isFinal) {
           setStatus('processing')
         }
@@ -94,7 +157,7 @@ export default function WidgetView() {
       case 'response_text':
       case 'response_text_chunk':
         setStatus('speaking')
-        isAgentSpeakingRef.current = true
+        if (msg.text) setTranscript(msg.text)
         break
 
       case 'audio':
@@ -122,7 +185,6 @@ export default function WidgetView() {
           decodeAndQueueAudio(combined.buffer)
           audioChunksBufferRef.current = []
         }
-        isAgentSpeakingRef.current = false
         setTimeout(() => setStatus('listening'), 500)
         break
 
@@ -131,7 +193,8 @@ export default function WidgetView() {
         break
 
       case 'interrupt':
-        audioChunksBufferRef.current = [] 
+      case 'clear_audio':
+        audioChunksBufferRef.current = []
         playbackQueueRef.current = []
         isPlayingRef.current = false
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -141,10 +204,8 @@ export default function WidgetView() {
         setStatus('listening')
         break
 
-      case 'latency_metrics':
-        if (msg.metrics) {
-          console.debug('[widget-latency]', msg.stage, msg.metrics)
-        }
+      case 'error':
+        console.error('Widget error:', msg.message)
         break
     }
   }
@@ -187,35 +248,26 @@ export default function WidgetView() {
 
   const startMicRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+      })
+      streamRef.current = stream
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })
       mediaRecorderRef.current = mediaRecorder
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0 && wsRef.current?.readyState === WebSocket.OPEN) {
-          const now = Date.now()
-          const chunkIntervalMs = lastAudioChunkSentAtRef.current ? now - lastAudioChunkSentAtRef.current : null
-          lastAudioChunkSentAtRef.current = now
+          lastAudioChunkSentAtRef.current = Date.now()
           e.data.arrayBuffer()
-            .then((buffer) => {
-              wsRef.current?.send(buffer)
-              if (chunkIntervalMs) {
-                console.debug('[widget-latency] mic_chunk_interval_ms', chunkIntervalMs)
-              }
-            })
-            .catch((err) => {
-              console.error('Binary mic chunk send error:', err)
-            })
+            .then((buffer) => wsRef.current?.send(buffer))
+            .catch(console.error)
         }
       }
 
-      // MediaRecorder webm chunks are significantly more reliable at ~1s.
       mediaRecorder.start(MIC_CHUNK_MS)
-      setIsRecording(true)
       setStatus('listening')
-      setIsMicOn(true)
     } catch (err) {
-      console.error(err)
+      console.error('Mic error:', err)
       setStatus('ended')
     }
   }
@@ -226,59 +278,158 @@ export default function WidgetView() {
     }
     cleanup()
     setStatus('ended')
-    setIsMicOn(false)
-    setIsRecording(false)
+    // Notify parent iframe
+    if (isEmbed && window.parent !== window) {
+      window.parent.postMessage({ type: 'vaani-call-ended' }, '*')
+    }
   }
 
   const isCallActive = status !== 'idle' && status !== 'ended'
 
-  return (
-    <div className="flex flex-col h-screen w-full bg-slate-50 overflow-hidden font-sans">
-      <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
-        <div className="text-center">
-          <h2 className="text-lg font-semibold text-slate-800">{agentName}</h2>
-          <p className="text-sm text-slate-500 capitalize">{status === 'idle' ? 'Ready to call' : status}</p>
-        </div>
+  const statusLabel: Record<SessionStatus, string> = {
+    idle: 'Ready to talk',
+    connecting: 'Connecting...',
+    ready: 'Connected',
+    listening: 'Listening...',
+    processing: 'Thinking...',
+    speaking: 'Speaking...',
+    ended: 'Call ended',
+  }
 
-        <div className="relative">
-          <div className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-500 ${
-            status === 'speaking' || status === 'listening' ? 'bg-purple-100 scale-110 shadow-xl shadow-purple-500/20' : 
-            status === 'connecting' ? 'bg-amber-100 animate-pulse' :
-            'bg-slate-200'
-          }`}>
-            <Mic className={`w-12 h-12 transition-colors ${
-              status === 'speaking' || status === 'listening' ? 'text-purple-600' : 'text-slate-400'
-            }`} />
+  return (
+    <div className="flex flex-col h-screen w-full overflow-hidden font-sans" style={{ background: '#fafbfc' }}>
+      {/* Header */}
+      <div
+        className="flex items-center gap-3 px-5 py-4"
+        style={{ background: themeColor }}
+      >
+        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+          <Phone className="w-5 h-5 text-white" />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-white font-semibold text-sm leading-tight">{agentName}</h2>
+          <p className="text-white/70 text-xs">{statusLabel[status]}</p>
+        </div>
+        {isCallActive && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-white/80 text-xs font-medium">Live</span>
           </div>
-          
+        )}
+      </div>
+
+      {/* Main Area */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
+        {/* Mic Visualizer */}
+        <div className="relative">
+          <div
+            className={`w-28 h-28 rounded-full flex items-center justify-center transition-all duration-500 ${
+              status === 'speaking'
+                ? 'scale-110'
+                : status === 'listening'
+                ? 'scale-105'
+                : status === 'connecting'
+                ? 'animate-pulse'
+                : ''
+            }`}
+            style={{
+              background:
+                status === 'speaking' || status === 'listening'
+                  ? themeColor + '18'
+                  : status === 'connecting'
+                  ? '#fef3c7'
+                  : '#f1f5f9',
+            }}
+          >
+            <Mic
+              className="w-10 h-10 transition-colors"
+              style={{
+                color:
+                  status === 'speaking' || status === 'listening'
+                    ? themeColor
+                    : status === 'connecting'
+                    ? '#f59e0b'
+                    : '#94a3b8',
+              }}
+            />
+          </div>
+
           {(status === 'speaking' || status === 'listening') && (
             <>
-              <div className="absolute inset-0 rounded-full border-2 border-purple-400 animate-ping opacity-20"></div>
-              <div className="absolute inset-[-20px] rounded-full border border-purple-300 animate-ping opacity-10" style={{ animationDelay: '300ms' }}></div>
+              <div
+                className="absolute inset-0 rounded-full animate-ping opacity-20"
+                style={{ border: `2px solid ${themeColor}` }}
+              />
+              <div
+                className="absolute inset-[-16px] rounded-full animate-ping opacity-10"
+                style={{ border: `1px solid ${themeColor}`, animationDelay: '300ms' }}
+              />
             </>
           )}
         </div>
+
+        {/* Status Text */}
+        <div className="text-center space-y-2 max-w-full">
+          <p className="text-sm font-medium" style={{ color: themeColor }}>
+            {statusLabel[status]}
+          </p>
+          {transcript && isCallActive && (
+            <p className="text-xs text-slate-500 px-4 max-h-16 overflow-y-auto leading-relaxed">
+              {transcript}
+            </p>
+          )}
+        </div>
+
+        {/* Status idle info */}
+        {status === 'idle' && (
+          <div className="text-center space-y-1 px-6">
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Click the button below to start a voice conversation with our AI assistant.
+            </p>
+          </div>
+        )}
+
+        {/* Ended state */}
+        {status === 'ended' && (
+          <div className="text-center space-y-1">
+            <p className="text-xs text-slate-400">Call has ended. Click below to start a new call.</p>
+          </div>
+        )}
       </div>
 
-      <div className="p-6 bg-white border-t border-slate-100">
+      {/* Action Button */}
+      <div className="p-4 bg-white border-t border-slate-100">
         {!isCallActive ? (
-          <Button 
-            className="w-full h-14 text-lg rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/25"
+          <button
+            className="w-full h-12 text-sm font-semibold rounded-full text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            style={{
+              background: themeColor,
+              boxShadow: `0 4px 20px ${themeColor}40`,
+            }}
             onClick={startCall}
             disabled={status === 'connecting' || !agentId}
           >
-            {status === 'connecting' ? <Loader2 className="w-6 h-6 animate-spin" /> : <Phone className="w-6 h-6 mr-2" />}
-            {status === 'connecting' ? 'Connecting...' : 'Start Call'}
-          </Button>
+            {status === 'connecting' ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Phone className="w-5 h-5" />
+            )}
+            {status === 'connecting' ? 'Connecting...' : status === 'ended' ? 'Call Again' : 'Start Voice Call'}
+          </button>
         ) : (
-          <Button 
-            className="w-full h-14 text-lg rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/25"
+          <button
+            className="w-full h-12 text-sm font-semibold rounded-full bg-red-500 text-white shadow-lg shadow-red-500/25 transition-all hover:bg-red-600 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
             onClick={endCall}
           >
-            <PhoneOff className="w-6 h-6 mr-2" />
+            <PhoneOff className="w-5 h-5" />
             End Call
-          </Button>
+          </button>
         )}
+      </div>
+
+      {/* Powered by */}
+      <div className="py-2 text-center">
+        <p className="text-[10px] text-slate-300">Powered by VaaniAI</p>
       </div>
     </div>
   )

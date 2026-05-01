@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card } from '@/components/ui/card'
 import { analyticsApi, agentsApi, numbersApi } from '@/lib/api'
-import { Phone, Zap, Clock, PhoneCall, TrendingUp, TrendingDown, Loader2 } from 'lucide-react'
+import { Phone, Zap, Clock, PhoneCall, TrendingUp, Loader2, Sparkles } from 'lucide-react'
 
 interface Stats {
   activeAgents: number
@@ -58,10 +57,10 @@ export function StatsCards() {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200/50 dark:border-slate-800/50 p-6 flex items-center justify-center h-36">
-            <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+          <div key={i} className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white/80 dark:bg-white/[0.02] p-6 flex items-center justify-center h-[140px]">
+            <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
           </div>
         ))}
       </div>
@@ -74,73 +73,60 @@ export function StatsCards() {
       value: stats?.activeAgents ?? 0,
       subtext: `of ${stats?.totalAgents ?? 0} total`,
       icon: Zap,
-      gradient: 'from-violet-600 via-purple-600 to-pink-600',
-      bgGradient: 'from-violet-600/10 to-pink-600/10',
-      borderColor: 'border-violet-200/50 dark:border-violet-800/50',
-      trendUp: true,
+      iconBg: 'bg-violet-100 dark:bg-violet-500/15',
+      iconColor: 'text-violet-600 dark:text-violet-400',
+      accent: 'violet',
     },
     {
-      label: 'Total Calls (30d)',
+      label: 'Total Calls',
       value: (stats?.totalCalls ?? 0).toLocaleString(),
       subtext: 'Last 30 days',
       icon: Phone,
-      gradient: 'from-blue-600 via-cyan-600 to-teal-600',
-      bgGradient: 'from-blue-600/10 to-teal-600/10',
-      borderColor: 'border-blue-200/50 dark:border-blue-800/50',
-      trendUp: true,
+      iconBg: 'bg-blue-100 dark:bg-blue-500/15',
+      iconColor: 'text-blue-600 dark:text-blue-400',
+      accent: 'blue',
     },
     {
       label: 'Minutes Used',
       value: (stats?.totalMinutes ?? 0).toLocaleString(),
       subtext: 'Last 30 days',
       icon: Clock,
-      gradient: 'from-green-600 via-emerald-600 to-teal-600',
-      bgGradient: 'from-green-600/10 to-teal-600/10',
-      borderColor: 'border-green-200/50 dark:border-green-800/50',
-      trendUp: true,
+      iconBg: 'bg-emerald-100 dark:bg-emerald-500/15',
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+      accent: 'emerald',
     },
     {
       label: 'Active Numbers',
       value: stats?.activeNumbers ?? 0,
       subtext: `of ${stats?.totalNumbers ?? 0} total`,
       icon: PhoneCall,
-      gradient: 'from-orange-600 via-red-600 to-pink-600',
-      bgGradient: 'from-orange-600/10 to-pink-600/10',
-      borderColor: 'border-orange-200/50 dark:border-orange-800/50',
-      trendUp: true,
+      iconBg: 'bg-orange-100 dark:bg-orange-500/15',
+      iconColor: 'text-orange-600 dark:text-orange-400',
+      accent: 'orange',
     },
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
       {statCards.map((stat) => {
         const Icon = stat.icon
         return (
-          <div key={stat.label} className="relative group">
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-600/5 to-pink-600/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-all duration-500 blur-xl" />
-            <Card className={`relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border ${stat.borderColor} rounded-3xl p-6 hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1`}>
-              <div className={`absolute inset-0 bg-gradient-to-br ${stat.bgGradient} rounded-3xl opacity-0 group-hover:opacity-30 transition-opacity duration-500`} />
-              <div className="relative">
-                <div className="flex items-start justify-between mb-5">
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${stat.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                    <Icon className="w-6 h-6 text-white" />
-                  </div>
-                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-light ${
-                    stat.trendUp
-                      ? 'bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400'
-                      : 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400'
-                  }`}>
-                    {stat.trendUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                    Live
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-light text-slate-500 dark:text-slate-400 uppercase tracking-wider">{stat.label}</p>
-                  <h3 className="text-4xl font-thin text-slate-900 dark:text-white tracking-tight">{stat.value}</h3>
-                  <p className="text-xs font-light text-slate-500 dark:text-slate-400">{stat.subtext}</p>
-                </div>
+          <div key={stat.label}
+            className="group relative rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white/80 dark:bg-white/[0.02] backdrop-blur-sm p-5 hover:shadow-lg hover:shadow-slate-200/40 dark:hover:shadow-black/20 hover:border-slate-300/80 dark:hover:border-white/[0.1] transition-all duration-300 hover:-translate-y-0.5">
+            <div className="flex items-start justify-between mb-4">
+              <div className={`w-11 h-11 rounded-xl ${stat.iconBg} flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
+                <Icon className={`w-5 h-5 ${stat.iconColor}`} />
               </div>
-            </Card>
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Live</span>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{stat.label}</p>
+              <h3 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight tabular-nums">{stat.value}</h3>
+              <p className="text-[12px] font-medium text-slate-400 dark:text-slate-500">{stat.subtext}</p>
+            </div>
           </div>
         )
       })}

@@ -6,24 +6,37 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { agentsApi } from '@/lib/api'
-import { Code, Copy, Check, MousePointerClick, Phone, MessageSquare, Paintbrush } from 'lucide-react'
+import { Code, Copy, Check, MousePointerClick, Phone, MessageSquare, Paintbrush, ExternalLink, CheckCircle2 } from 'lucide-react'
 
 export default function WebWidgetPage() {
   const [agents, setAgents] = useState<any[]>([])
   const [selectedAgent, setSelectedAgent] = useState<string>('')
+  const [selectedAgentName, setSelectedAgentName] = useState<string>('')
   const [color, setColor] = useState('#8b5cf6')
   const [buttonText, setButtonText] = useState('Talk to AI Support')
   const [position, setPosition] = useState('bottom-right')
   const [copied, setCopied] = useState(false)
+  const [showWidget, setShowWidget] = useState(false)
+
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'
 
   useEffect(() => {
     agentsApi.getAll().then(res => {
       setAgents(res.agents || [])
-      if (res.agents?.length > 0) setSelectedAgent(res.agents[0]._id)
+      if (res.agents?.length > 0) {
+        setSelectedAgent(res.agents[0]._id)
+        setSelectedAgentName(res.agents[0].name)
+      }
     }).catch(console.error)
   }, [])
 
-  const embedCode = `<!-- VaaniAI Widget -->
+  const handleAgentChange = (id: string) => {
+    setSelectedAgent(id)
+    const agent = agents.find((a: any) => a._id === id)
+    if (agent) setSelectedAgentName(agent.name)
+  }
+
+  const embedCode = `<!-- VaaniAI Voice Widget -->
 <script>
   window.vaaniConfig = {
     agentId: "${selectedAgent || 'YOUR_AGENT_ID'}",
@@ -32,7 +45,7 @@ export default function WebWidgetPage() {
     position: "${position}"
   };
 </script>
-<script src="https://your-domain.com/widget.js" async defer></script>`
+<script src="${BACKEND_URL}/widget.js" async defer></script>`
 
   const copyCode = () => {
     navigator.clipboard.writeText(embedCode)
@@ -63,7 +76,7 @@ export default function WebWidgetPage() {
           <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200/50 dark:border-slate-800/50 p-6 space-y-6">
             <div>
               <Label className="text-slate-700 dark:text-slate-300 font-medium text-sm">Target Agent</Label>
-              <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+              <Select value={selectedAgent} onValueChange={handleAgentChange}>
                 <SelectTrigger className="mt-2 bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 rounded-xl">
                   <SelectValue placeholder="Select an Agent" />
                 </SelectTrigger>
@@ -140,9 +153,32 @@ export default function WebWidgetPage() {
         </div>
 
         {/* Live Preview Panel */}
-        <div className="lg:col-span-3">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/50 dark:border-slate-800/50 h-full min-h-[500px] relative overflow-hidden shadow-sm flex flex-col">
-            {/* Fake browser header */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* How it works */}
+          <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200/50 dark:border-slate-800/50 p-5">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-500" />
+              How It Works
+            </h3>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center mx-auto mb-2 text-sm font-bold">1</div>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Copy embed code</p>
+              </div>
+              <div className="text-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center mx-auto mb-2 text-sm font-bold">2</div>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Paste before {'</body>'}</p>
+              </div>
+              <div className="text-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center mx-auto mb-2 text-sm font-bold">3</div>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Widget appears live!</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Live Preview */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/50 dark:border-slate-800/50 min-h-[500px] relative overflow-hidden shadow-sm flex flex-col">
+            {/* Browser chrome */}
             <div className="h-12 border-b border-slate-100 dark:border-slate-800 flex items-center px-4 gap-2 bg-slate-50/50 dark:bg-slate-900/50">
               <div className="flex gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-red-400"></div>
@@ -152,8 +188,16 @@ export default function WebWidgetPage() {
               <div className="mx-4 flex-1 h-7 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center px-3 justify-center text-xs text-slate-400 font-mono">
                 your-website.com
               </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowWidget(!showWidget)}
+                className="text-xs h-7 px-3 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+              >
+                {showWidget ? 'Hide' : 'Test'} Widget
+              </Button>
             </div>
-            
+
             {/* Fake website body */}
             <div className="flex-1 p-8 opacity-40 select-none pointer-events-none">
               <div className="w-1/2 h-8 bg-slate-200 dark:bg-slate-800 rounded-lg mb-6"></div>
@@ -167,46 +211,52 @@ export default function WebWidgetPage() {
               </div>
             </div>
 
-            {/* The Widget Preview */}
-            <div 
-              className="absolute p-4 flex flex-col items-end gap-4"
-              style={{
-                bottom: '1rem',
-                [position === 'bottom-right' ? 'right' : 'left']: '1rem',
-                alignItems: position === 'bottom-right' ? 'flex-end' : 'flex-start'
-              }}
-            >
-              {/* Fake chat window bubble (decorative) */}
-              <div className="bg-white dark:bg-slate-800 w-72 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden transform scale-95 origin-bottom animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="h-16 flex items-center px-4" style={{ backgroundColor: color }}>
-                  <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center mr-3 backdrop-blur-md">
-                    <Phone className="w-5 h-5 text-white fill-white/20" />
-                  </div>
-                  <div>
-                    <h4 className="text-white font-medium text-sm">AI Support</h4>
-                    <p className="text-white/70 text-xs">Online</p>
-                  </div>
-                </div>
-                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 h-32 flex items-center justify-center">
-                  <Button 
-                    className="w-full rounded-full h-12 shadow-lg hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: color, color: '#fff' }}
-                  >
-                    <Phone className="w-4 h-4 mr-2" />
-                    Start Voice Call
-                  </Button>
+            {/* Working Widget Preview */}
+            {showWidget && selectedAgent && (
+              <div
+                className="absolute flex flex-col items-end gap-3"
+                style={{
+                  bottom: '1rem',
+                  [position === 'bottom-right' ? 'right' : 'left']: '1rem',
+                  alignItems: position === 'bottom-right' ? 'flex-end' : 'flex-start',
+                }}
+              >
+                {/* Live Widget iframe */}
+                <div className="w-80 h-[440px] rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <iframe
+                    src={`/widget?agentId=${selectedAgent}&color=${encodeURIComponent(color)}&mode=embed&backend=${encodeURIComponent(BACKEND_URL)}`}
+                    className="w-full h-full border-none"
+                    allow="microphone; autoplay"
+                  />
                 </div>
               </div>
+            )}
 
-              {/* The Floating Button */}
-              <button 
-                className="flex items-center gap-2 px-5 py-3.5 rounded-full shadow-2xl shadow-purple-500/20 text-white font-medium hover:scale-105 transition-transform duration-300"
-                style={{ backgroundColor: color }}
+            {!showWidget && (
+              <div
+                className="absolute flex flex-col gap-3"
+                style={{
+                  bottom: '1rem',
+                  [position === 'bottom-right' ? 'right' : 'left']: '1rem',
+                  alignItems: position === 'bottom-right' ? 'flex-end' : 'flex-start',
+                }}
               >
-                <MessageSquare className="w-5 h-5" />
-                {buttonText}
-              </button>
-            </div>
+                {/* Static Button Preview */}
+                <button
+                  className="flex items-center gap-2 px-5 py-3.5 rounded-full shadow-2xl text-white font-medium hover:scale-105 transition-transform duration-300 cursor-pointer"
+                  style={{ backgroundColor: color, boxShadow: `0 4px 24px ${color}40` }}
+                  onClick={() => setShowWidget(true)}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                  {buttonText}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
