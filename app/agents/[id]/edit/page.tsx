@@ -9,6 +9,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import toast from 'react-hot-toast'
 
 export default function EditAgentPage() {
   const router = useRouter()
@@ -37,7 +38,7 @@ export default function EditAgentPage() {
         try {
           tools = JSON.parse(formData.toolsJson)
         } catch (e) {
-          alert('Invalid Tools JSON')
+          toast.error('Invalid Tools JSON')
           return
         }
       }
@@ -59,27 +60,30 @@ export default function EditAgentPage() {
           model: formData.llmModel,
         },
         tools,
-        workflowId: formData.workflowId,
-        knowledgeBaseId: formData.knowledgeBaseId,
-        transferNumber: formData.transferNumber,
-        voicemailMessage: formData.voicemailMessage,
+        workflowId: formData.workflowId || null,
+        knowledgeBaseId: formData.knowledgeBaseId || null,
+        transferNumber: formData.transferNumber || '',
+        transferToAgentId: formData.transferToAgentId || null,
+        voicemailMessage: formData.voicemailMessage || '',
         postCallActions: {
-          sendSMS: formData.sendSMS,
-          sendWhatsApp: formData.sendWhatsApp,
-          smsTemplate: formData.smsTemplate,
-          whatsappTemplate: formData.whatsappTemplate,
+          sendSMS: formData.sendSMS || false,
+          sendWhatsApp: formData.sendWhatsApp || false,
+          smsTemplate: formData.smsTemplate || '',
+          whatsappTemplate: formData.whatsappTemplate || '',
         },
         advanced: {
-          customLlmUrl: formData.customLlmUrl,
+          customLlmUrl: formData.customLlmUrl || '',
           interruptionSensitivity: formData.interruptionSensitivity,
           backgroundDenoising: formData.backgroundDenoising,
           fillerWords: formData.fillerWords,
           ambientNoise: formData.ambientNoise,
         }
       })
+      toast.success('Agent updated successfully!')
       router.push('/agents')
-    } catch (e) {
-      alert('Failed to update agent')
+    } catch (e: any) {
+      console.error('Agent update error:', e)
+      toast.error(e?.message || 'Failed to update agent')
     }
   }
 
