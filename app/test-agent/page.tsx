@@ -63,7 +63,7 @@ export default function TestAgentPage() {
   const [liveSentiment, setLiveSentiment] = useState<{ sentiment: string; score: number; text: string } | null>(null)
   const [sentimentHistory, setSentimentHistory] = useState<Array<{ sentiment: string; score: number; text: string; time: Date }>>([])
   const [transferInfo, setTransferInfo] = useState<{ transferTo: string; reason: string } | null>(null)
-  
+
   // Script Simulator State
   const [isScriptModalOpen, setIsScriptModalOpen] = useState(false)
   const [scriptText, setScriptText] = useState('')
@@ -88,14 +88,14 @@ export default function TestAgentPage() {
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) { router.push('/auth/login'); return }
-    
+
     // Parse URL params
     const params = new URLSearchParams(window.location.search);
     const agentIdFromUrl = params.get('agentId');
     if (agentIdFromUrl) {
       setSelectedAgentId(agentIdFromUrl);
     }
-    
+
     loadAgents()
     return () => cleanup()
   }, [])
@@ -121,16 +121,16 @@ export default function TestAgentPage() {
       micStreamRef.current = null
     }
     if (micContextRef.current && micContextRef.current.state !== 'closed') {
-      micContextRef.current.close().catch(() => {})
+      micContextRef.current.close().catch(() => { })
       micContextRef.current = null
     }
     if (mediaRecorderRef.current) {
-      try { mediaRecorderRef.current.stop() } catch (e) {}
+      try { mediaRecorderRef.current.stop() } catch (e) { }
       mediaRecorderRef.current = null
     }
     if (callTimerRef.current) clearInterval(callTimerRef.current)
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      audioContextRef.current.close().catch(() => {})
+      audioContextRef.current.close().catch(() => { })
     }
     audioContextRef.current = null
     if (ambientAudioRef.current) {
@@ -217,10 +217,10 @@ export default function TestAgentPage() {
 
         // Start ambient noise if configured
         if (msg.ambientNoise && msg.ambientNoise !== 'none') {
-          const noiseUrl = msg.ambientNoise === 'office' 
-            ? 'https://actions.google.com/sounds/v1/crowds/restaurant_chatter.ogg' 
+          const noiseUrl = msg.ambientNoise === 'office'
+            ? 'https://actions.google.com/sounds/v1/crowds/restaurant_chatter.ogg'
             : 'https://actions.google.com/sounds/v1/crowds/battle_crowd_celebration.ogg';
-          
+
           ambientAudioRef.current = new Audio(noiseUrl);
           ambientAudioRef.current.loop = true;
           ambientAudioRef.current.volume = 0.15;
@@ -248,7 +248,7 @@ export default function TestAgentPage() {
           setMessages(prev => {
             const newMessages = [...prev];
             const lastMsg = newMessages[newMessages.length - 1];
-            
+
             if (lastMsg && lastMsg.role === 'assistant') {
               lastMsg.content = msg.text;
               return [...newMessages];
@@ -270,7 +270,7 @@ export default function TestAgentPage() {
           setMessages(prev => {
             const newMessages = [...prev];
             const lastMsg = newMessages[newMessages.length - 1];
-            
+
             if (lastMsg && lastMsg.role === 'assistant') {
               lastMsg.content += ' ' + msg.text;
               return [...newMessages];
@@ -308,17 +308,17 @@ export default function TestAgentPage() {
             combined.set(new Uint8Array(buffer), offset)
             offset += buffer.byteLength
           }
-          
+
           decodeAndQueueAudio(combined.buffer)
           audioChunksBufferRef.current = []
         }
-        
+
         isAgentSpeakingRef.current = false;
-        
+
         setTimeout(() => {
           setStatus('listening')
           if (isSimulating) {
-             processNextScriptLine();
+            processNextScriptLine();
           }
         }, 500)
         break
@@ -340,7 +340,7 @@ export default function TestAgentPage() {
       case 'error':
         setStatusText(`⚠️ ${msg.message}`)
         break
-        
+
       case 'interrupt':
       case 'clear_audio':
         audioChunksBufferRef.current = []
@@ -348,8 +348,8 @@ export default function TestAgentPage() {
         isPlayingRef.current = false
         if (audioContextRef.current && audioContextRef.current.state === 'running') {
           audioContextRef.current.suspend().then(() => {
-            audioContextRef.current?.resume().catch(() => {})
-          }).catch(() => {})
+            audioContextRef.current?.resume().catch(() => { })
+          }).catch(() => { })
         }
         setStatusText('Agent interrupted');
         setStatus('listening')
@@ -388,7 +388,7 @@ export default function TestAgentPage() {
 
       const decoded = await audioContextRef.current.decodeAudioData(arrayBuffer)
       playbackQueueRef.current.push(decoded)
-      
+
       if (!isPlayingRef.current) {
         playNextAudio()
       }
@@ -402,7 +402,7 @@ export default function TestAgentPage() {
       isPlayingRef.current = false
       return
     }
-    
+
     isPlayingRef.current = true
 
     try {
@@ -414,11 +414,11 @@ export default function TestAgentPage() {
       const source = audioContextRef.current.createBufferSource()
       source.buffer = audioBuffer
       source.connect(audioContextRef.current.destination)
-      
+
       source.onended = () => {
         playNextAudio()
       }
-      
+
       source.start()
     } catch (e) {
       console.error('Playback error:', e)
@@ -447,7 +447,7 @@ export default function TestAgentPage() {
       }
 
       const actualSampleRate = micCtx.sampleRate
-      
+
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: 'mic_config', sampleRate: actualSampleRate, encoding: 'linear16', channels: 1 }))
       }
@@ -487,7 +487,7 @@ export default function TestAgentPage() {
       micStreamRef.current = null
     }
     if (micContextRef.current && micContextRef.current.state !== 'closed') {
-      micContextRef.current.close().catch(() => {})
+      micContextRef.current.close().catch(() => { })
       micContextRef.current = null
     }
     setIsRecording(false)
@@ -518,40 +518,40 @@ export default function TestAgentPage() {
 
   const startSimulation = () => {
     if (!scriptText.trim() || !selectedAgentId) return;
-    
+
     const lines = scriptText.split('\n')
       .map(line => line.replace(/^(User:|Customer:)/i, '').trim())
       .filter(line => line.length > 0);
-      
+
     if (lines.length === 0) return;
-    
+
     simulationQueueRef.current = lines;
     setIsSimulating(true);
     setIsScriptModalOpen(false);
-    
+
     if (!isCallActive) {
       startCall();
     } else {
       processNextScriptLine();
     }
   }
-  
+
   const processNextScriptLine = () => {
     if (!isSimulating || simulationQueueRef.current.length === 0) {
       setIsSimulating(false);
       return;
     }
-    
+
     if (isAgentSpeakingRef.current || status === 'processing' || status === 'speaking') {
       setTimeout(processNextScriptLine, 1000);
       return;
     }
-    
+
     const nextLine = simulationQueueRef.current.shift();
     if (nextLine && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'text', text: nextLine }));
     }
-    
+
     if (simulationQueueRef.current.length === 0) {
       setIsSimulating(false);
       setStatusText('Simulation complete');
@@ -560,14 +560,14 @@ export default function TestAgentPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#020617] p-6 relative overflow-hidden font-sans transition-colors duration-300">
-      
+
       {/* Cyberpunk Grid Background */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(30,41,59,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(30,41,59,0.1)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(30,41,59,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(30,41,59,0.5)_1px,transparent_1px)] bg-[size:32px_32px] opacity-20 pointer-events-none" />
       <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-cyan-900/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-blue-900/10 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="max-w-6xl mx-auto space-y-6 relative z-10 pt-4">
-        
+
         {/* Header */}
         <div className="relative">
           <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-blue-500/5 rounded-3xl blur-xl" />
@@ -601,10 +601,10 @@ export default function TestAgentPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
+
           {/* Control Panel */}
           <div className="space-y-4">
-            
+
             {/* Agent selector */}
             <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-slate-800/80 p-5 shadow-sm">
               <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
@@ -646,7 +646,7 @@ export default function TestAgentPage() {
               <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-cyan-500" /> Operations
               </h2>
-              
+
               {!isCallActive ? (
                 <Button
                   onClick={startCall}
@@ -682,7 +682,7 @@ export default function TestAgentPage() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="py-4">
-                    <Textarea 
+                    <Textarea
                       placeholder="e.g.&#10;Hello, I need help with my account.&#10;Yes, my email is john@example.com&#10;Thank you!"
                       className="min-h-[200px] resize-none font-mono text-sm bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:border-cyan-500/50 focus:ring-cyan-500/20"
                       value={scriptText}
@@ -691,7 +691,7 @@ export default function TestAgentPage() {
                   </div>
                   <DialogFooter>
                     <Button variant="outline" className="border-slate-200 dark:border-slate-700" onClick={() => setIsScriptModalOpen(false)}>Cancel</Button>
-                    <Button 
+                    <Button
                       onClick={startSimulation}
                       disabled={!scriptText.trim() || !selectedAgentId}
                       className="bg-cyan-500 hover:bg-cyan-400 text-white dark:text-slate-950 font-bold"
@@ -712,10 +712,9 @@ export default function TestAgentPage() {
               {isCallActive && (
                 <>
                   {/* Continuous Voice Indicator */}
-                  <div className={`w-full h-16 rounded-xl font-medium transition-all duration-300 flex flex-col items-center justify-center gap-1 ${
-                      isRecording
-                        ? 'bg-cyan-500 text-white dark:text-slate-950 shadow-[0_0_20px_rgba(6,182,212,0.4)] relative overflow-hidden'
-                        : 'bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                  <div className={`w-full h-16 rounded-xl font-medium transition-all duration-300 flex flex-col items-center justify-center gap-1 ${isRecording
+                      ? 'bg-cyan-500 text-white dark:text-slate-950 shadow-[0_0_20px_rgba(6,182,212,0.4)] relative overflow-hidden'
+                      : 'bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
                     }`}
                   >
                     {isRecording && <div className="absolute inset-0 bg-white/20 animate-pulse pointer-events-none" />}
@@ -725,11 +724,10 @@ export default function TestAgentPage() {
 
                   <button
                     onClick={() => setIsMuted(!isMuted)}
-                    className={`w-full h-10 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all ${
-                      isMuted
+                    className={`w-full h-10 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all ${isMuted
                         ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50'
                         : 'bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800/50'
-                    }`}
+                      }`}
                   >
                     {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     {isMuted ? 'Agent Muted' : 'Mute Agent'}
@@ -763,28 +761,26 @@ export default function TestAgentPage() {
                   <Heart className="w-4 h-4 text-pink-500" />
                   Emotional Analytics
                 </h2>
-                
+
                 {liveSentiment ? (
                   <div className="space-y-4">
                     {/* Current Sentiment */}
                     <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-950/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-inner ${
-                        liveSentiment.sentiment === 'positive'
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-inner ${liveSentiment.sentiment === 'positive'
                           ? 'bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50'
                           : liveSentiment.sentiment === 'negative'
-                          ? 'bg-red-100 dark:bg-red-950/40 border border-red-200 dark:border-red-800/50'
-                          : 'bg-amber-100 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50'
-                      }`}>
+                            ? 'bg-red-100 dark:bg-red-950/40 border border-red-200 dark:border-red-800/50'
+                            : 'bg-amber-100 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50'
+                        }`}>
                         {liveSentiment.sentiment === 'positive' ? '😊' : liveSentiment.sentiment === 'negative' ? '😠' : '😐'}
                       </div>
                       <div className="flex-1">
-                        <p className={`text-sm font-bold uppercase tracking-wider ${
-                          liveSentiment.sentiment === 'positive'
+                        <p className={`text-sm font-bold uppercase tracking-wider ${liveSentiment.sentiment === 'positive'
                             ? 'text-emerald-600 dark:text-emerald-400'
                             : liveSentiment.sentiment === 'negative'
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-amber-600 dark:text-amber-400'
-                        }`}>
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-amber-600 dark:text-amber-400'
+                          }`}>
                           {liveSentiment.sentiment}
                         </p>
                         <p className="text-xs text-slate-500 font-mono mt-1">Confidence: {liveSentiment.score?.toFixed(2)}</p>
@@ -797,9 +793,8 @@ export default function TestAgentPage() {
                     {/* Score Bar */}
                     <div className="relative h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
                       <div
-                        className={`absolute top-0 left-1/2 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_currentColor] ${
-                          liveSentiment.score >= 0 ? 'bg-emerald-500 text-emerald-500' : 'bg-red-500 text-red-500'
-                        }`}
+                        className={`absolute top-0 left-1/2 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_currentColor] ${liveSentiment.score >= 0 ? 'bg-emerald-500 text-emerald-500' : 'bg-red-500 text-red-500'
+                          }`}
                         style={{
                           width: `${Math.abs(liveSentiment.score) * 50}%`,
                           transform: liveSentiment.score >= 0 ? 'none' : 'translateX(-100%)',
@@ -814,13 +809,12 @@ export default function TestAgentPage() {
                         {sentimentHistory.slice(-12).map((s, i) => (
                           <div
                             key={i}
-                            className={`w-3 h-3 rounded-full transition-all duration-300 shadow-sm ${
-                              s.sentiment === 'positive'
+                            className={`w-3 h-3 rounded-full transition-all duration-300 shadow-sm ${s.sentiment === 'positive'
                                 ? 'bg-emerald-500 shadow-emerald-500/50'
                                 : s.sentiment === 'negative'
-                                ? 'bg-red-500 shadow-red-500/50'
-                                : 'bg-amber-500 shadow-amber-500/50'
-                            }`}
+                                  ? 'bg-red-500 shadow-red-500/50'
+                                  : 'bg-amber-500 shadow-amber-500/50'
+                              }`}
                             title={`${s.sentiment}: ${s.text?.substring(0, 50)}...`}
                           />
                         ))}
@@ -829,7 +823,7 @@ export default function TestAgentPage() {
                   </div>
                 ) : (
                   <div className="h-24 flex items-center justify-center border border-dashed border-slate-300 dark:border-slate-800 rounded-xl">
-                     <p className="text-xs text-slate-500 font-mono">Awaiting emotional context...</p>
+                    <p className="text-xs text-slate-500 font-mono">Awaiting emotional context...</p>
                   </div>
                 )}
               </div>
@@ -865,18 +859,16 @@ export default function TestAgentPage() {
               ) : (
                 messages.map((msg, i) => (
                   <div key={i} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg ${
-                      msg.role === 'user'
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg ${msg.role === 'user'
                         ? 'bg-slate-800 dark:bg-slate-200'
                         : 'bg-cyan-500 shadow-cyan-500/30'
-                    }`}>
+                      }`}>
                       {msg.role === 'user' ? <User className="w-5 h-5 text-white dark:text-slate-900" /> : <Bot className="w-5 h-5 text-white" />}
                     </div>
-                    <div className={`max-w-[75%] rounded-2xl px-5 py-4 shadow-sm ${
-                      msg.role === 'user'
+                    <div className={`max-w-[75%] rounded-2xl px-5 py-4 shadow-sm ${msg.role === 'user'
                         ? 'bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-tr-sm'
                         : 'bg-cyan-50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-900/50 rounded-tl-sm'
-                    }`}>
+                      }`}>
                       <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium">{msg.content}</p>
                       <div className={`flex items-center gap-1.5 mt-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <Clock className="w-3 h-3 text-slate-400" />

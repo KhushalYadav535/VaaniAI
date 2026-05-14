@@ -5,9 +5,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CallLog } from '@/lib/types'
 import { formatDateTime } from '@/lib/utils'
-import { Play, MoreVertical } from 'lucide-react'
+import { Play, MoreVertical, Download } from 'lucide-react'
 import { useState } from 'react'
 import { CallDetailPanel } from './call-detail-panel'
+import { storageApi } from '@/lib/api'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +22,27 @@ interface CallsTableProps {
 
 export function CallsTable({ logs }: CallsTableProps) {
   const [selectedCall, setSelectedCall] = useState<CallLog | null>(null)
+  const [downloading, setDownloading] = useState<string | null>(null)
+
+  const handleDownloadRecording = async (callId: string, recordingUrl: string) => {
+    setDownloading(callId)
+    try {
+      const response = await storageApi.downloadRecording(recordingUrl)
+      const blob = new Blob([response], { type: 'audio/mpeg' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `call-recording-${callId}.mp3`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to download recording:', error)
+    } finally {
+      setDownloading(null)
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -105,10 +127,20 @@ export function CallsTable({ logs }: CallsTableProps) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                         {log.recordingUrl && (
-                          <DropdownMenuItem className="text-slate-700 dark:text-slate-50 focus:bg-slate-100 dark:focus:bg-slate-800">
-                            <Play size={16} className="mr-2" />
-                            Play Recording
-                          </DropdownMenuItem>
+                          <>
+                            <DropdownMenuItem 
+                              className="text-slate-700 dark:text-slate-50 focus:bg-slate-100 dark:focus:bg-slate-800"
+                              onClick={() => handleDownloadRecording(log._id || log.id, log.recordingUrl)}
+                              disabled={downloading === (log._id || log.id)}
+                            >
+                              <Download size={16} className="mr-2" />
+                              {downloading === (log._id || log.id) ? 'Downloading...' : 'Download Recording'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-slate-700 dark:text-slate-50 focus:bg-slate-100 dark:focus:bg-slate-800">
+                              <Play size={16} className="mr-2" />
+                              Play Recording
+                            </DropdownMenuItem>
+                          </>
                         )}
                         <DropdownMenuItem className="text-slate-700 dark:text-slate-50 focus:bg-slate-100 dark:focus:bg-slate-800">
                           Download Details

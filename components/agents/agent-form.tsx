@@ -188,7 +188,7 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
   const llmModels: Record<string, string[]> = {
     openai: ['gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
     groq: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768'],
-    gemini: ['gemini-1.5-pro', 'gemini-1.0-pro'],
+    gemini: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'],
   }
 
   const tabs = [

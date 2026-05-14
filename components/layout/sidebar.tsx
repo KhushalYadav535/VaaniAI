@@ -21,7 +21,8 @@ import {
   Activity,
   Code,
   Users,
-  LibraryBig
+  LibraryBig,
+  FlaskConical
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -45,6 +46,7 @@ const customerNavigation = [
   { name: 'Voice Settings', href: '/voice-settings', icon: Mic },
   { name: 'Webhooks', href: '/webhooks', icon: Webhook },
   { name: 'Web Widget', href: '/web-widget', icon: Code },
+  { name: 'Playground', href: '/playground', icon: FlaskConical },
   { name: 'Test Agent', href: '/test-agent', icon: Microscope },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]

@@ -90,6 +90,14 @@ export const agentsApi = {
 
   duplicate: (id: string) =>
     apiRequest(`/agents/${id}/duplicate`, { method: 'POST' }),
+
+  // Prompt Playground — test a prompt without voice call
+  playground: (data: { systemPrompt: string; userMessage: string; model?: string; temperature?: number; history?: any[] }) =>
+    apiRequest('/agents/playground', { method: 'POST', body: JSON.stringify(data) }),
+
+  // A/B Test — compare two prompts side-by-side
+  abTest: (data: { promptA: string; promptB: string; userMessage: string; model?: string; temperature?: number }) =>
+    apiRequest('/agents/ab-test', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // ─── Phone Numbers ───────────────────────────────────────────────────────────
@@ -136,6 +144,35 @@ export const callsApi = {
   getTranscript: (id: string) => apiRequest(`/calls/${id}/transcript`),
 
   delete: (id: string) => apiRequest(`/calls/${id}`, { method: 'DELETE' }),
+
+  // Full-text search across all call transcripts
+  search: (q: string, params?: { agentId?: string; limit?: number; status?: string }) => {
+    const query = new URLSearchParams({ q, ...params } as any).toString();
+    return apiRequest(`/calls/search?${query}`);
+  },
+
+  // Export single call transcript
+  exportCall: (id: string, format: 'csv' | 'json' | 'txt' = 'json') =>
+    `${API_BASE}/calls/${id}/export?format=${format}`,
+
+  // Bulk export all calls as CSV/JSON
+  exportBulk: (period: '7d' | '30d' | '90d' | 'all' = '30d', format: 'csv' | 'json' = 'csv') =>
+    `${API_BASE}/calls/export/bulk?period=${period}&format=${format}`,
+
+  // Bulk delete calls
+  bulkDelete: (callIds: string[]) =>
+    apiRequest('/calls/bulk-delete', { method: 'POST', body: JSON.stringify({ callIds }) }),
+
+  // Call tags
+  updateTags: (id: string, tags: string[]) =>
+    apiRequest(`/calls/${id}/tags`, { method: 'PATCH', body: JSON.stringify({ tags }) }),
+
+  // Call stats summary
+  getStats: () => apiRequest('/calls/stats/summary'),
+
+  // Manual QA scoring
+  updateQA: (id: string, data: { score?: number; grade?: string; feedback?: string }) =>
+    apiRequest(`/calls/${id}/qa`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 // ─── Analytics ───────────────────────────────────────────────────────────────
@@ -176,6 +213,12 @@ export const analyticsApi = {
 
   getTrends: (period?: '7d' | '30d' | '90d') =>
     apiRequest(`/analytics/trends${period ? '?period=' + period : ''}`),
+
+  getLatencyMetrics: (period?: '7d' | '30d' | '90d') =>
+    apiRequest(`/analytics/latency${period ? '?period=' + period : ''}`),
+
+  getQADistribution: (period?: '7d' | '30d' | '90d') =>
+    apiRequest(`/analytics/qa-distribution${period ? '?period=' + period : ''}`),
 };
 
 // ─── Knowledge Base ──────────────────────────────────────────────────────────
@@ -331,6 +374,29 @@ export const superAdminApi = {
   deleteUser: (id: string) =>
     apiRequest(`/super-admin/users/${id}`, { method: 'DELETE' }),
   getCalls: () => apiRequest('/super-admin/calls'),
+};
+
+// ─── Storage (Recordings) ───────────────────────────────────────────────────────
+
+export const storageApi = {
+  downloadRecording: (filename: string) => {
+    const token = localStorage.getItem('token');
+    return fetch(`${API_BASE}/storage/recordings/download/${filename}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    }).then(res => {
+      if (!res.ok) throw new Error('Download failed');
+      return res.blob();
+    });
+  },
+};
+
+// ─── Usage Tracking ─────────────────────────────────────────────────────────────
+
+export const usageApi = {
+  getCurrent: () => apiRequest('/usage'),
+  getDaily: (days = 30) => apiRequest(`/usage/daily?days=${days}`),
 };
 
 // ─── CRM (Leads & Tickets) ───────────────────────────────────────────────────
