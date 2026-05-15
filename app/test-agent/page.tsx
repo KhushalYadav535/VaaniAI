@@ -45,7 +45,7 @@ const STATUS_COLORS: Record<SessionStatus, string> = {
   ended: 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]',
 }
 
-const MIC_CHUNK_MS = Number(process.env.NEXT_PUBLIC_MIC_CHUNK_MS || 1000)
+const MIC_CHUNK_MS = Number(process.env.NEXT_PUBLIC_MIC_CHUNK_MS || 100)
 
 export default function TestAgentPage() {
   const router = useRouter()
@@ -80,7 +80,9 @@ export default function TestAgentPage() {
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null)
   const audioChunksBufferRef = useRef<ArrayBuffer[]>([]) // Accumulate decoded ArrayBuffers
   const playbackQueueRef = useRef<AudioBuffer[]>([]) // For decoded sentences ready to play
+  const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const isPlayingRef = useRef(false)
+  const lastInterruptAtRef = useRef(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const callTimerRef = useRef<NodeJS.Timeout | null>(null)
   const callStartRef = useRef<Date | null>(null)
@@ -145,6 +147,7 @@ export default function TestAgentPage() {
   const startCall = async () => {
     if (!selectedAgentId) return
     setStatus('connecting')
+    setStatusText('Opening voice channel...')
     setMessages([])
     setCallDuration(0)
 
@@ -168,10 +171,10 @@ export default function TestAgentPage() {
           const msg = JSON.parse(event.data)
           handleWsMessage(msg)
         } else if (event.data instanceof ArrayBuffer) {
-          audioChunksBufferRef.current.push(event.data)
+          decodeAndQueueAudio(event.data)
         } else if (event.data instanceof Blob) {
           event.data.arrayBuffer().then((buf) => {
-            audioChunksBufferRef.current.push(buf)
+            decodeAndQueueAudio(buf)
           }).catch((e) => console.error('Binary audio parse error', e))
         }
       } catch (e) {
@@ -286,13 +289,36 @@ export default function TestAgentPage() {
         }
         break
 
+      case 'text_stream':
+        if (msg.content) {
+          setMessages(prev => {
+            const newMessages = [...prev]
+            const lastMsg = newMessages[newMessages.length - 1]
+
+            if (lastMsg && lastMsg.role === 'assistant') {
+              lastMsg.content += ' ' + msg.content
+              return [...newMessages]
+            }
+
+            return [...prev, {
+              role: 'assistant',
+              content: msg.content,
+              timestamp: new Date(),
+            }]
+          })
+          setStatus('speaking')
+          isAgentSpeakingRef.current = true
+        }
+        break
+
       case 'audio':
-        if (!isMuted && msg.data) {
+      case 'audio_stream':
+        if (!isMuted && (msg.data || msg.chunk)) {
           try {
-            const binary = atob(msg.data)
+            const binary = atob(msg.data || msg.chunk)
             const bytes = new Uint8Array(binary.length)
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-            audioChunksBufferRef.current.push(bytes.buffer)
+            decodeAndQueueAudio(bytes.buffer)
           } catch (e) {
             console.error('Base64 decode error:', e)
           }
@@ -300,6 +326,7 @@ export default function TestAgentPage() {
         break
 
       case 'audio_end':
+      case 'audio_stream_end':
         if (audioChunksBufferRef.current.length > 0) {
           const totalLength = audioChunksBufferRef.current.reduce((acc, curr) => acc + curr.byteLength, 0)
           const combined = new Uint8Array(totalLength)
@@ -313,10 +340,8 @@ export default function TestAgentPage() {
           audioChunksBufferRef.current = []
         }
 
-        isAgentSpeakingRef.current = false;
-
         setTimeout(() => {
-          setStatus('listening')
+          if (!isPlayingRef.current) setStatus('listening')
           if (isSimulating) {
             processNextScriptLine();
           }
@@ -339,18 +364,14 @@ export default function TestAgentPage() {
 
       case 'error':
         setStatusText(`⚠️ ${msg.message}`)
+        if (status === 'connecting') {
+          setStatus('ended')
+        }
         break
 
       case 'interrupt':
       case 'clear_audio':
-        audioChunksBufferRef.current = []
-        playbackQueueRef.current = []
-        isPlayingRef.current = false
-        if (audioContextRef.current && audioContextRef.current.state === 'running') {
-          audioContextRef.current.suspend().then(() => {
-            audioContextRef.current?.resume().catch(() => { })
-          }).catch(() => { })
-        }
+        interruptAgentPlayback()
         setStatusText('Agent interrupted');
         setStatus('listening')
         break
@@ -388,6 +409,7 @@ export default function TestAgentPage() {
 
       const decoded = await audioContextRef.current.decodeAudioData(arrayBuffer)
       playbackQueueRef.current.push(decoded)
+      isAgentSpeakingRef.current = true
 
       if (!isPlayingRef.current) {
         playNextAudio()
@@ -414,8 +436,15 @@ export default function TestAgentPage() {
       const source = audioContextRef.current.createBufferSource()
       source.buffer = audioBuffer
       source.connect(audioContextRef.current.destination)
+      currentAudioSourceRef.current = source
 
       source.onended = () => {
+        currentAudioSourceRef.current = null
+        if (playbackQueueRef.current.length === 0) {
+          isAgentSpeakingRef.current = false
+          setStatus('listening')
+          if (isSimulating) processNextScriptLine()
+        }
         playNextAudio()
       }
 
@@ -425,6 +454,18 @@ export default function TestAgentPage() {
       isPlayingRef.current = false
       playNextAudio()
     }
+  }
+
+  const interruptAgentPlayback = () => {
+    audioChunksBufferRef.current = []
+    playbackQueueRef.current = []
+    isPlayingRef.current = false
+    isAgentSpeakingRef.current = false
+
+    try {
+      currentAudioSourceRef.current?.stop()
+    } catch {}
+    currentAudioSourceRef.current = null
   }
 
   const startMicRecording = async () => {
@@ -459,9 +500,17 @@ export default function TestAgentPage() {
         if (wsRef.current?.readyState !== WebSocket.OPEN) return
         const inputData = event.inputBuffer.getChannelData(0)
         const int16 = new Int16Array(inputData.length)
+        let sumSquares = 0
         for (let i = 0; i < inputData.length; i++) {
           const clamped = Math.max(-1, Math.min(1, inputData[i]))
+          sumSquares += clamped * clamped
           int16[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7FFF
+        }
+        const rms = Math.sqrt(sumSquares / inputData.length)
+        if (isAgentSpeakingRef.current && rms > 0.035 && Date.now() - lastInterruptAtRef.current > 350) {
+          lastInterruptAtRef.current = Date.now()
+          interruptAgentPlayback()
+          wsRef.current.send(JSON.stringify({ type: 'interrupt' }))
         }
         wsRef.current.send(int16.buffer)
       }

@@ -324,14 +324,31 @@ export function createVoiceSession(
   ws.binaryType = 'arraybuffer';
 
   ws.onopen = () => {
-    // Initialize session
-    ws.send(JSON.stringify({
+    console.log('[VaaniAI Voice] WebSocket connection success');
+
+    const initMessage = {
       type: 'init',
       agentId,
       token,
+      enableStt: true,
       preferBinaryAudio: options?.preferBinaryAudio ?? true,
-    }));
+      streamProtocol: true,
+    };
+
+    ws.send(JSON.stringify(initMessage));
+    console.log('[VaaniAI Voice] init message sent');
   };
+
+  ws.addEventListener('message', (event) => {
+    if (typeof event.data !== 'string') return;
+
+    try {
+      const message = JSON.parse(event.data);
+      if (message.type === 'ready') {
+        console.log('[VaaniAI Voice] ready message received');
+      }
+    } catch {}
+  });
 
   return ws;
 }

@@ -5,7 +5,7 @@ import { Phone, PhoneOff, Mic, Loader2 } from 'lucide-react'
 
 type SessionStatus = 'idle' | 'connecting' | 'ready' | 'listening' | 'processing' | 'speaking' | 'ended'
 
-const MIC_CHUNK_MS = 1000
+const MIC_CHUNK_MS = 100
 
 export default function WidgetView() {
   const [agentId, setAgentId] = useState<string>('')
@@ -24,8 +24,11 @@ export default function WidgetView() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const audioChunksBufferRef = useRef<ArrayBuffer[]>([])
   const playbackQueueRef = useRef<AudioBuffer[]>([])
+  const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const isPlayingRef = useRef(false)
+  const isAgentSpeakingRef = useRef(false)
   const lastAudioChunkSentAtRef = useRef<number | null>(null)
+  const lastInterruptAtRef = useRef(0)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -108,7 +111,9 @@ export default function WidgetView() {
           type: 'init',
           agentId,
           token,
+          enableStt: true,
           preferBinaryAudio: true,
+          streamProtocol: true,
         }))
       }
 
@@ -118,7 +123,7 @@ export default function WidgetView() {
             const msg = JSON.parse(event.data)
             handleWsMessage(msg)
           } else if (event.data instanceof ArrayBuffer) {
-            audioChunksBufferRef.current.push(event.data)
+            decodeAndQueueAudio(event.data)
           }
         } catch (e) {
           console.error('WS parse error', e)
@@ -157,16 +162,24 @@ export default function WidgetView() {
       case 'response_text':
       case 'response_text_chunk':
         setStatus('speaking')
+        isAgentSpeakingRef.current = true
         if (msg.text) setTranscript(msg.text)
         break
 
+      case 'text_stream':
+        setStatus('speaking')
+        isAgentSpeakingRef.current = true
+        if (msg.content) setTranscript(prev => `${prev}${prev ? ' ' : ''}${msg.content}`)
+        break
+
       case 'audio':
-        if (msg.data) {
+      case 'audio_stream':
+        if (msg.data || msg.chunk) {
           try {
-            const binary = atob(msg.data)
+            const binary = atob(msg.data || msg.chunk)
             const bytes = new Uint8Array(binary.length)
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-            audioChunksBufferRef.current.push(bytes.buffer)
+            decodeAndQueueAudio(bytes.buffer)
           } catch (e) {
             console.error('Base64 decode error:', e)
           }
@@ -174,6 +187,7 @@ export default function WidgetView() {
         break
 
       case 'audio_end':
+      case 'audio_stream_end':
         if (audioChunksBufferRef.current.length > 0) {
           const totalLength = audioChunksBufferRef.current.reduce((acc, curr) => acc + curr.byteLength, 0)
           const combined = new Uint8Array(totalLength)
@@ -185,7 +199,9 @@ export default function WidgetView() {
           decodeAndQueueAudio(combined.buffer)
           audioChunksBufferRef.current = []
         }
-        setTimeout(() => setStatus('listening'), 500)
+        setTimeout(() => {
+          if (!isPlayingRef.current) setStatus('listening')
+        }, 500)
         break
 
       case 'session_ended':
@@ -194,13 +210,7 @@ export default function WidgetView() {
 
       case 'interrupt':
       case 'clear_audio':
-        audioChunksBufferRef.current = []
-        playbackQueueRef.current = []
-        isPlayingRef.current = false
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-          audioContextRef.current.close().catch(() => {})
-          audioContextRef.current = null
-        }
+        interruptAgentPlayback()
         setStatus('listening')
         break
 
@@ -237,13 +247,33 @@ export default function WidgetView() {
       const source = audioContextRef.current.createBufferSource()
       source.buffer = audioBuffer
       source.connect(audioContextRef.current.destination)
-      source.onended = () => playNextAudio()
+      currentAudioSourceRef.current = source
+      source.onended = () => {
+        currentAudioSourceRef.current = null
+        if (playbackQueueRef.current.length === 0) {
+          isAgentSpeakingRef.current = false
+          setStatus('listening')
+        }
+        playNextAudio()
+      }
       source.start()
     } catch (e) {
       console.error('Playback error:', e)
       isPlayingRef.current = false
       playNextAudio()
     }
+  }
+
+  const interruptAgentPlayback = () => {
+    audioChunksBufferRef.current = []
+    playbackQueueRef.current = []
+    isPlayingRef.current = false
+    isAgentSpeakingRef.current = false
+
+    try {
+      currentAudioSourceRef.current?.stop()
+    } catch {}
+    currentAudioSourceRef.current = null
   }
 
   const startMicRecording = async () => {
@@ -258,9 +288,13 @@ export default function WidgetView() {
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0 && wsRef.current?.readyState === WebSocket.OPEN) {
           lastAudioChunkSentAtRef.current = Date.now()
-          e.data.arrayBuffer()
-            .then((buffer) => wsRef.current?.send(buffer))
-            .catch(console.error)
+          const shouldInterrupt = isAgentSpeakingRef.current && Date.now() - lastInterruptAtRef.current > 350
+          if (shouldInterrupt) {
+            lastInterruptAtRef.current = Date.now()
+            interruptAgentPlayback()
+            wsRef.current.send(JSON.stringify({ type: 'interrupt' }))
+          }
+          wsRef.current.send(e.data)
         }
       }
 
