@@ -7,6 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input'
 import { agentsApi, createVoiceSession } from '@/lib/api'
 import {
+  WorkletJitterAudioPlayer,
+  RealtimeMicStreamer,
+  arrayBufferToBase64,
+} from '@/lib/realtime-voice-audio'
+import {
   Mic, MicOff, Phone, PhoneOff, Send, Bot, User,
   Volume2, VolumeX, Zap, Activity, MessageSquare, Clock,
   Heart, TrendingUp, TrendingDown, Minus, PlayCircle,
@@ -73,7 +78,8 @@ export default function TestAgentPage() {
   const lastAudioChunkSentAtRef = useRef<number | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const micStreamerRef = useRef<RealtimeMicStreamer | null>(null)
+  const audioPlayerRef = useRef<WorkletJitterAudioPlayer | null>(null)
   const micContextRef = useRef<AudioContext | null>(null)  // Separate context for mic capture
   const micStreamRef = useRef<MediaStream | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -106,6 +112,11 @@ export default function TestAgentPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  useEffect(() => {
+    audioPlayerRef.current?.setMuted(isMuted)
+    if (isMuted) interruptAgentPlayback()
+  }, [isMuted])
+
   const loadAgents = async () => {
     try {
       const data: any = await agentsApi.getAll({ status: 'active' })
@@ -117,6 +128,10 @@ export default function TestAgentPage() {
 
   const cleanup = () => {
     if (wsRef.current) { wsRef.current.close(); wsRef.current = null }
+    micStreamerRef.current?.stop()
+    micStreamerRef.current = null
+    audioPlayerRef.current?.close().catch(() => {})
+    audioPlayerRef.current = null
     // Stop mic capture
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach(t => t.stop())
@@ -125,10 +140,6 @@ export default function TestAgentPage() {
     if (micContextRef.current && micContextRef.current.state !== 'closed') {
       micContextRef.current.close().catch(() => { })
       micContextRef.current = null
-    }
-    if (mediaRecorderRef.current) {
-      try { mediaRecorderRef.current.stop() } catch (e) { }
-      mediaRecorderRef.current = null
     }
     if (callTimerRef.current) clearInterval(callTimerRef.current)
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -151,18 +162,30 @@ export default function TestAgentPage() {
     setMessages([])
     setCallDuration(0)
 
-    // Pre-create AudioContext on user gesture to unlock browser autoplay policy
-    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-      audioContextRef.current = new AudioContext()
-    }
-    if (audioContextRef.current.state === 'suspended') {
-      await audioContextRef.current.resume()
-    }
+    audioPlayerRef.current = new WorkletJitterAudioPlayer({
+      onPlaybackStart: () => {
+        isPlayingRef.current = true
+        isAgentSpeakingRef.current = true
+        micStreamerRef.current?.setAgentSpeaking(true)
+        setStatus('speaking')
+      },
+      onPlaybackEnd: () => {
+        isPlayingRef.current = false
+        isAgentSpeakingRef.current = false
+        micStreamerRef.current?.setAgentSpeaking(false)
+        setStatus('listening')
+        if (isSimulating) processNextScriptLine()
+      },
+    })
+    await audioPlayerRef.current.start()
 
     const token = localStorage.getItem('token')
     if (!token) { router.push('/auth/login'); return }
 
-    const ws = createVoiceSession(selectedAgentId, { preferBinaryAudio: true })
+    const ws = createVoiceSession(selectedAgentId, {
+      preferBinaryAudio: false,
+      inputAudio: { mode: 'raw', encoding: 'linear16', sampleRate: 16000, channels: 1 },
+    })
     wsRef.current = ws
 
     ws.onmessage = (event) => {
@@ -314,31 +337,13 @@ export default function TestAgentPage() {
       case 'audio':
       case 'audio_stream':
         if (!isMuted && (msg.data || msg.chunk)) {
-          try {
-            const binary = atob(msg.data || msg.chunk)
-            const bytes = new Uint8Array(binary.length)
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-            decodeAndQueueAudio(bytes.buffer)
-          } catch (e) {
-            console.error('Base64 decode error:', e)
-          }
+          audioPlayerRef.current?.enqueuePacket(msg).catch((e) => console.error('Audio queue error:', e))
         }
         break
 
       case 'audio_end':
       case 'audio_stream_end':
-        if (audioChunksBufferRef.current.length > 0) {
-          const totalLength = audioChunksBufferRef.current.reduce((acc, curr) => acc + curr.byteLength, 0)
-          const combined = new Uint8Array(totalLength)
-          let offset = 0
-          for (const buffer of audioChunksBufferRef.current) {
-            combined.set(new Uint8Array(buffer), offset)
-            offset += buffer.byteLength
-          }
-
-          decodeAndQueueAudio(combined.buffer)
-          audioChunksBufferRef.current = []
-        }
+        audioPlayerRef.current?.handleStreamEnd(msg)
 
         setTimeout(() => {
           if (!isPlayingRef.current) setStatus('listening')
@@ -400,60 +405,14 @@ export default function TestAgentPage() {
 
   const decodeAndQueueAudio = async (arrayBuffer: ArrayBuffer) => {
     try {
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new AudioContext()
-      }
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume()
-      }
-
-      const decoded = await audioContextRef.current.decodeAudioData(arrayBuffer)
-      playbackQueueRef.current.push(decoded)
-      isAgentSpeakingRef.current = true
-
-      if (!isPlayingRef.current) {
-        playNextAudio()
-      }
+      await audioPlayerRef.current?.enqueueArrayBuffer(arrayBuffer)
     } catch (e) {
       console.error('Audio decode error:', e)
     }
   }
 
   const playNextAudio = async () => {
-    if (playbackQueueRef.current.length === 0) {
-      isPlayingRef.current = false
-      return
-    }
-
-    isPlayingRef.current = true
-
-    try {
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new AudioContext()
-      }
-
-      const audioBuffer = playbackQueueRef.current.shift()!
-      const source = audioContextRef.current.createBufferSource()
-      source.buffer = audioBuffer
-      source.connect(audioContextRef.current.destination)
-      currentAudioSourceRef.current = source
-
-      source.onended = () => {
-        currentAudioSourceRef.current = null
-        if (playbackQueueRef.current.length === 0) {
-          isAgentSpeakingRef.current = false
-          setStatus('listening')
-          if (isSimulating) processNextScriptLine()
-        }
-        playNextAudio()
-      }
-
-      source.start()
-    } catch (e) {
-      console.error('Playback error:', e)
-      isPlayingRef.current = false
-      playNextAudio()
-    }
+    await audioPlayerRef.current?.start()
   }
 
   const interruptAgentPlayback = () => {
@@ -461,6 +420,8 @@ export default function TestAgentPage() {
     playbackQueueRef.current = []
     isPlayingRef.current = false
     isAgentSpeakingRef.current = false
+    micStreamerRef.current?.setAgentSpeaking(false)
+    audioPlayerRef.current?.clear()
 
     try {
       currentAudioSourceRef.current?.stop()
@@ -470,56 +431,49 @@ export default function TestAgentPage() {
 
   const startMicRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+      const mic = new RealtimeMicStreamer({
+        targetSampleRate: 16000,
+        chunkMs: MIC_CHUNK_MS,
+        silenceMs: 700,
+        vadThreshold: 0.012,
+        interruptionThreshold: 0.04,
+        onStarted: (cfg) => {
+          wsRef.current?.send(JSON.stringify({
+            type: 'mic_config',
+            sampleRate: cfg.sampleRate,
+            encoding: cfg.encoding,
+            channels: cfg.channels,
+            mode: cfg.mode,
+          }))
         },
-        video: false,
+        onAudioFrame: (frame) => {
+          if (wsRef.current?.readyState !== WebSocket.OPEN) return
+          lastAudioChunkSentAtRef.current = Date.now()
+          wsRef.current.send(JSON.stringify({
+            type: 'audio',
+            seq: frame.seq,
+            timestamp: frame.timestamp,
+            sampleRate: frame.sampleRate,
+            encoding: 'linear16',
+            channels: frame.channels,
+            data: arrayBufferToBase64(frame.data),
+          }))
+        },
+        onSpeechStart: () => {
+          if (wsRef.current?.readyState !== WebSocket.OPEN) return
+          if (isAgentSpeakingRef.current && Date.now() - lastInterruptAtRef.current > 350) {
+            lastInterruptAtRef.current = Date.now()
+            interruptAgentPlayback()
+          }
+          wsRef.current.send(JSON.stringify({ type: 'user_speech_start' }))
+        },
+        onSpeechEnd: () => {
+          wsRef.current?.send(JSON.stringify({ type: 'user_speech_end' }))
+        },
       })
-      micStreamRef.current = stream
 
-      const micCtx = new AudioContext()
-      micContextRef.current = micCtx
-
-      if (micCtx.state === 'suspended') {
-        await micCtx.resume()
-      }
-
-      const actualSampleRate = micCtx.sampleRate
-
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'mic_config', sampleRate: actualSampleRate, encoding: 'linear16', channels: 1 }))
-      }
-
-      const source = micCtx.createMediaStreamSource(stream)
-      const processor = micCtx.createScriptProcessor(4096, 1, 1)
-
-      processor.onaudioprocess = (event) => {
-        if (wsRef.current?.readyState !== WebSocket.OPEN) return
-        const inputData = event.inputBuffer.getChannelData(0)
-        const int16 = new Int16Array(inputData.length)
-        let sumSquares = 0
-        for (let i = 0; i < inputData.length; i++) {
-          const clamped = Math.max(-1, Math.min(1, inputData[i]))
-          sumSquares += clamped * clamped
-          int16[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7FFF
-        }
-        const rms = Math.sqrt(sumSquares / inputData.length)
-        if (isAgentSpeakingRef.current && rms > 0.035 && Date.now() - lastInterruptAtRef.current > 350) {
-          lastInterruptAtRef.current = Date.now()
-          interruptAgentPlayback()
-          wsRef.current.send(JSON.stringify({ type: 'interrupt' }))
-        }
-        wsRef.current.send(int16.buffer)
-      }
-
-      source.connect(processor)
-      const silentNode = micCtx.createGain()
-      silentNode.gain.value = 0
-      processor.connect(silentNode)
-      silentNode.connect(micCtx.destination)
+      micStreamerRef.current = mic
+      await mic.start()
 
       setIsRecording(true)
       setStatus('listening')
@@ -531,6 +485,8 @@ export default function TestAgentPage() {
   }
 
   const stopMicRecording = () => {
+    micStreamerRef.current?.stop()
+    micStreamerRef.current = null
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach(t => t.stop())
       micStreamRef.current = null
@@ -563,7 +519,7 @@ export default function TestAgentPage() {
 
   const formatDuration = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
 
-  const isCallActive = status !== 'idle' && status !== 'ended'
+  const isCallActive = status !== 'idle' && status !== 'ended' && status !== 'connecting'
 
   const startSimulation = () => {
     if (!scriptText.trim() || !selectedAgentId) return;

@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Phone, PhoneOff, Mic, Loader2 } from 'lucide-react'
+import {
+  WorkletJitterAudioPlayer,
+  RealtimeMicStreamer,
+  arrayBufferToBase64,
+} from '@/lib/realtime-voice-audio'
 
 type SessionStatus = 'idle' | 'connecting' | 'ready' | 'listening' | 'processing' | 'speaking' | 'ended'
 
@@ -19,7 +24,8 @@ export default function WidgetView() {
   const [widgetToken, setWidgetToken] = useState<string>('')
   
   const wsRef = useRef<WebSocket | null>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const micStreamerRef = useRef<RealtimeMicStreamer | null>(null)
+  const audioPlayerRef = useRef<WorkletJitterAudioPlayer | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const audioChunksBufferRef = useRef<ArrayBuffer[]>([])
@@ -66,9 +72,10 @@ export default function WidgetView() {
 
   const cleanup = useCallback(() => {
     if (wsRef.current) { wsRef.current.close(); wsRef.current = null }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop()
-    }
+    micStreamerRef.current?.stop()
+    micStreamerRef.current = null
+    audioPlayerRef.current?.close().catch(() => {})
+    audioPlayerRef.current = null
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
@@ -88,6 +95,22 @@ export default function WidgetView() {
     setTranscript('')
 
     try {
+      audioPlayerRef.current = new WorkletJitterAudioPlayer({
+        onPlaybackStart: () => {
+          isPlayingRef.current = true
+          isAgentSpeakingRef.current = true
+          micStreamerRef.current?.setAgentSpeaking(true)
+          setStatus('speaking')
+        },
+        onPlaybackEnd: () => {
+          isPlayingRef.current = false
+          isAgentSpeakingRef.current = false
+          micStreamerRef.current?.setAgentSpeaking(false)
+          setStatus('listening')
+        },
+      })
+      await audioPlayerRef.current.start()
+
       // Get widget session token from backend
       const sessionRes = await fetch(`${backendUrl}/widget/${agentId}/session`, { method: 'POST' })
       const sessionData = await sessionRes.json()
@@ -112,8 +135,9 @@ export default function WidgetView() {
           agentId,
           token,
           enableStt: true,
-          preferBinaryAudio: true,
+          preferBinaryAudio: false,
           streamProtocol: true,
+          inputAudio: { mode: 'raw', encoding: 'linear16', sampleRate: 16000, channels: 1 },
         }))
       }
 
@@ -175,30 +199,13 @@ export default function WidgetView() {
       case 'audio':
       case 'audio_stream':
         if (msg.data || msg.chunk) {
-          try {
-            const binary = atob(msg.data || msg.chunk)
-            const bytes = new Uint8Array(binary.length)
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-            decodeAndQueueAudio(bytes.buffer)
-          } catch (e) {
-            console.error('Base64 decode error:', e)
-          }
+          audioPlayerRef.current?.enqueuePacket(msg).catch((e) => console.error('Audio queue error:', e))
         }
         break
 
       case 'audio_end':
       case 'audio_stream_end':
-        if (audioChunksBufferRef.current.length > 0) {
-          const totalLength = audioChunksBufferRef.current.reduce((acc, curr) => acc + curr.byteLength, 0)
-          const combined = new Uint8Array(totalLength)
-          let offset = 0
-          for (const buffer of audioChunksBufferRef.current) {
-            combined.set(new Uint8Array(buffer), offset)
-            offset += buffer.byteLength
-          }
-          decodeAndQueueAudio(combined.buffer)
-          audioChunksBufferRef.current = []
-        }
+        audioPlayerRef.current?.handleStreamEnd(msg)
         setTimeout(() => {
           if (!isPlayingRef.current) setStatus('listening')
         }, 500)
@@ -222,46 +229,14 @@ export default function WidgetView() {
 
   const decodeAndQueueAudio = async (arrayBuffer: ArrayBuffer) => {
     try {
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new AudioContext()
-      }
-      const decoded = await audioContextRef.current.decodeAudioData(arrayBuffer)
-      playbackQueueRef.current.push(decoded)
-      if (!isPlayingRef.current) playNextAudio()
+      await audioPlayerRef.current?.enqueueArrayBuffer(arrayBuffer)
     } catch (e) {
       console.error('Audio decode error:', e)
     }
   }
 
   const playNextAudio = async () => {
-    if (playbackQueueRef.current.length === 0) {
-      isPlayingRef.current = false
-      return
-    }
-    isPlayingRef.current = true
-    try {
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new AudioContext()
-      }
-      const audioBuffer = playbackQueueRef.current.shift()!
-      const source = audioContextRef.current.createBufferSource()
-      source.buffer = audioBuffer
-      source.connect(audioContextRef.current.destination)
-      currentAudioSourceRef.current = source
-      source.onended = () => {
-        currentAudioSourceRef.current = null
-        if (playbackQueueRef.current.length === 0) {
-          isAgentSpeakingRef.current = false
-          setStatus('listening')
-        }
-        playNextAudio()
-      }
-      source.start()
-    } catch (e) {
-      console.error('Playback error:', e)
-      isPlayingRef.current = false
-      playNextAudio()
-    }
+    await audioPlayerRef.current?.start()
   }
 
   const interruptAgentPlayback = () => {
@@ -269,6 +244,8 @@ export default function WidgetView() {
     playbackQueueRef.current = []
     isPlayingRef.current = false
     isAgentSpeakingRef.current = false
+    micStreamerRef.current?.setAgentSpeaking(false)
+    audioPlayerRef.current?.clear()
 
     try {
       currentAudioSourceRef.current?.stop()
@@ -278,27 +255,49 @@ export default function WidgetView() {
 
   const startMicRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
-      })
-      streamRef.current = stream
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })
-      mediaRecorderRef.current = mediaRecorder
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0 && wsRef.current?.readyState === WebSocket.OPEN) {
+      const mic = new RealtimeMicStreamer({
+        targetSampleRate: 16000,
+        chunkMs: MIC_CHUNK_MS,
+        silenceMs: 700,
+        vadThreshold: 0.012,
+        interruptionThreshold: 0.04,
+        onStarted: (cfg) => {
+          wsRef.current?.send(JSON.stringify({
+            type: 'mic_config',
+            sampleRate: cfg.sampleRate,
+            encoding: cfg.encoding,
+            channels: cfg.channels,
+            mode: cfg.mode,
+          }))
+        },
+        onAudioFrame: (frame) => {
+          if (wsRef.current?.readyState !== WebSocket.OPEN) return
           lastAudioChunkSentAtRef.current = Date.now()
-          const shouldInterrupt = isAgentSpeakingRef.current && Date.now() - lastInterruptAtRef.current > 350
-          if (shouldInterrupt) {
+          wsRef.current.send(JSON.stringify({
+            type: 'audio',
+            seq: frame.seq,
+            timestamp: frame.timestamp,
+            sampleRate: frame.sampleRate,
+            encoding: 'linear16',
+            channels: frame.channels,
+            data: arrayBufferToBase64(frame.data),
+          }))
+        },
+        onSpeechStart: () => {
+          if (wsRef.current?.readyState !== WebSocket.OPEN) return
+          if (isAgentSpeakingRef.current && Date.now() - lastInterruptAtRef.current > 350) {
             lastInterruptAtRef.current = Date.now()
             interruptAgentPlayback()
-            wsRef.current.send(JSON.stringify({ type: 'interrupt' }))
           }
-          wsRef.current.send(e.data)
-        }
-      }
+          wsRef.current.send(JSON.stringify({ type: 'user_speech_start' }))
+        },
+        onSpeechEnd: () => {
+          wsRef.current?.send(JSON.stringify({ type: 'user_speech_end' }))
+        },
+      })
 
-      mediaRecorder.start(MIC_CHUNK_MS)
+      micStreamerRef.current = mic
+      await mic.start()
       setStatus('listening')
     } catch (err) {
       console.error('Mic error:', err)
@@ -318,7 +317,7 @@ export default function WidgetView() {
     }
   }
 
-  const isCallActive = status !== 'idle' && status !== 'ended'
+  const isCallActive = status !== 'idle' && status !== 'ended' && status !== 'connecting'
 
   const statusLabel: Record<SessionStatus, string> = {
     idle: 'Ready to talk',
