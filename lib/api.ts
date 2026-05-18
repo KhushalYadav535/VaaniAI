@@ -317,7 +317,15 @@ export const twilioApi = {
 
 export function createVoiceSession(
   agentId: string,
-  options?: { preferBinaryAudio?: boolean }
+  options?: {
+    preferBinaryAudio?: boolean
+    inputAudio?: {
+      mode?: 'raw' | 'webm'
+      encoding?: 'linear16'
+      sampleRate?: number
+      channels?: number
+    }
+  }
 ): WebSocket {
   const token = localStorage.getItem('token');
   const ws = new WebSocket(`${WS_BASE}/ws/voice`);
@@ -331,8 +339,14 @@ export function createVoiceSession(
       agentId,
       token,
       enableStt: true,
-      preferBinaryAudio: options?.preferBinaryAudio ?? true,
+      preferBinaryAudio: options?.preferBinaryAudio ?? false,
       streamProtocol: true,
+      inputAudio: options?.inputAudio ?? {
+        mode: 'raw',
+        encoding: 'linear16',
+        sampleRate: 16000,
+        channels: 1,
+      },
     };
 
     ws.send(JSON.stringify(initMessage));
