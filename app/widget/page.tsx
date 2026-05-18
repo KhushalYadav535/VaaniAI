@@ -285,10 +285,6 @@ export default function WidgetView() {
         },
         onSpeechStart: () => {
           if (wsRef.current?.readyState !== WebSocket.OPEN) return
-          if (isAgentSpeakingRef.current && Date.now() - lastInterruptAtRef.current > 350) {
-            lastInterruptAtRef.current = Date.now()
-            interruptAgentPlayback()
-          }
           wsRef.current.send(JSON.stringify({ type: 'user_speech_start' }))
         },
         onSpeechEnd: () => {
