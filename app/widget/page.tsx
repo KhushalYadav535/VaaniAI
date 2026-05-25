@@ -5,8 +5,8 @@ import { Phone, PhoneOff, Mic, Loader2 } from 'lucide-react'
 import {
   WorkletJitterAudioPlayer,
   RealtimeMicStreamer,
-  arrayBufferToBase64,
 } from '@/lib/realtime-voice-audio'
+import { ReconnectingVoiceSession } from '@/lib/voice-session-client'
 
 type SessionStatus = 'idle' | 'connecting' | 'ready' | 'listening' | 'processing' | 'speaking' | 'ended'
 
@@ -23,7 +23,7 @@ export default function WidgetView() {
   const [wsUrl, setWsUrl] = useState<string>('')
   const [widgetToken, setWidgetToken] = useState<string>('')
   
-  const wsRef = useRef<WebSocket | null>(null)
+  const wsRef = useRef<ReconnectingVoiceSession | null>(null)
   const micStreamerRef = useRef<RealtimeMicStreamer | null>(null)
   const audioPlayerRef = useRef<WorkletJitterAudioPlayer | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -124,43 +124,39 @@ export default function WidgetView() {
       const token = sessionData.token
       setWidgetToken(token)
 
-      // Connect WebSocket
-      const ws = new WebSocket(`${wsUrl}/ws/voice`)
-      ws.binaryType = 'arraybuffer'
-      wsRef.current = ws
-
-      ws.onopen = () => {
-        ws.send(JSON.stringify({
-          type: 'init',
-          agentId,
-          token,
+      // Reconnecting WS — survives transient drops
+      const ws = new ReconnectingVoiceSession({
+        wsUrl,
+        agentId,
+        token,
+        initOptions: {
           enableStt: true,
           preferBinaryAudio: false,
           streamProtocol: true,
           inputAudio: { mode: 'raw', encoding: 'linear16', sampleRate: 16000, channels: 1 },
-        }))
-      }
-
-      ws.onmessage = (event) => {
-        try {
-          if (typeof event.data === 'string') {
-            const msg = JSON.parse(event.data)
-            handleWsMessage(msg)
-          } else if (event.data instanceof ArrayBuffer) {
-            decodeAndQueueAudio(event.data)
+        },
+        onMessage: (event) => {
+          try {
+            if (typeof event.data === 'string') {
+              const msg = JSON.parse(event.data)
+              handleWsMessage(msg)
+            } else if (event.data instanceof ArrayBuffer) {
+              decodeAndQueueAudio(event.data)
+            }
+          } catch (e) {
+            console.error('WS parse error', e)
           }
-        } catch (e) {
-          console.error('WS parse error', e)
-        }
-      }
-
-      ws.onerror = () => {
-        setStatus('ended')
-      }
-
-      ws.onclose = () => {
-        setStatus('ended')
-      }
+        },
+        onError: () => { /* swallowed — onClose handles status */ },
+        onClose: (event) => {
+          // 1013 = server busy. 1000 = clean close. Both stop reconnect.
+          if (event.code === 1013 || event.code === 1000) {
+            setStatus('ended')
+          }
+        },
+        onGiveUp: () => setStatus('ended'),
+      })
+      wsRef.current = ws
     } catch (err) {
       console.error('Start call error:', err)
       setStatus('ended')
@@ -273,15 +269,9 @@ export default function WidgetView() {
         onAudioFrame: (frame) => {
           if (wsRef.current?.readyState !== WebSocket.OPEN) return
           lastAudioChunkSentAtRef.current = Date.now()
-          wsRef.current.send(JSON.stringify({
-            type: 'audio',
-            seq: frame.seq,
-            timestamp: frame.timestamp,
-            sampleRate: frame.sampleRate,
-            encoding: 'linear16',
-            channels: frame.channels,
-            data: arrayBufferToBase64(frame.data),
-          }))
+          // Send raw PCM as a binary WS frame — backend handleAudioChunkBinary
+          // pipes it straight into Deepgram. Saves ~33% bandwidth + base64 CPU.
+          wsRef.current.send(frame.data)
         },
         onSpeechStart: () => {
           if (wsRef.current?.readyState !== WebSocket.OPEN) return

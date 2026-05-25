@@ -370,6 +370,11 @@ export function createVoiceSession(
 export const API_URL = API_BASE;
 export const WS_URL = WS_BASE;
 
+// Reconnecting voice session — survives transient network drops without ending the call.
+// Drop-in replacement for createVoiceSession() when resilience matters.
+export { ReconnectingVoiceSession } from './voice-session-client';
+export type { ReconnectingVoiceSessionOptions, VoiceSessionInitOptions } from './voice-session-client';
+
 
 // Call Flows
 export const callFlowsApi = {

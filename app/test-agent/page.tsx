@@ -5,15 +5,14 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
-import { agentsApi, createVoiceSession } from '@/lib/api'
+import { agentsApi, WS_URL, ReconnectingVoiceSession } from '@/lib/api'
 import {
   WorkletJitterAudioPlayer,
   RealtimeMicStreamer,
-  arrayBufferToBase64,
 } from '@/lib/realtime-voice-audio'
 import {
   Mic, MicOff, Phone, PhoneOff, Send, Bot, User,
-  Volume2, VolumeX, Zap, Activity, MessageSquare, Clock,
+  Volume2, VolumeX, Activity, MessageSquare, Clock,
   Heart, TrendingUp, TrendingDown, Minus, PlayCircle,
   Terminal, Sparkles
 } from 'lucide-react'
@@ -40,14 +39,14 @@ const STATUS_LABELS: Record<SessionStatus, string> = {
   ended: 'Call ended',
 }
 
-const STATUS_COLORS: Record<SessionStatus, string> = {
-  idle: 'bg-slate-400',
-  connecting: 'bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)] animate-pulse',
-  ready: 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse',
-  listening: 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse',
-  processing: 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] animate-pulse',
-  speaking: 'bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)] animate-pulse',
-  ended: 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]',
+const STATUS_DOT: Record<SessionStatus, string> = {
+  idle: 'bg-zinc-300 dark:bg-zinc-700',
+  connecting: 'bg-amber-500 animate-pulse',
+  ready: 'bg-emerald-500 animate-pulse',
+  listening: 'bg-emerald-500 animate-pulse',
+  processing: 'bg-blue-500 animate-pulse',
+  speaking: 'bg-violet-500 animate-pulse',
+  ended: 'bg-red-500',
 }
 
 const MIC_CHUNK_MS = Number(process.env.NEXT_PUBLIC_MIC_CHUNK_MS || 100)
@@ -77,7 +76,7 @@ export default function TestAgentPage() {
   const isAgentSpeakingRef = useRef(false)
   const lastAudioChunkSentAtRef = useRef<number | null>(null)
 
-  const wsRef = useRef<WebSocket | null>(null)
+  const wsRef = useRef<ReconnectingVoiceSession | null>(null)
   const micStreamerRef = useRef<RealtimeMicStreamer | null>(null)
   const audioPlayerRef = useRef<WorkletJitterAudioPlayer | null>(null)
   const micContextRef = useRef<AudioContext | null>(null)  // Separate context for mic capture
@@ -182,38 +181,55 @@ export default function TestAgentPage() {
     const token = localStorage.getItem('token')
     if (!token) { router.push('/auth/login'); return }
 
-    const ws = createVoiceSession(selectedAgentId, {
-      preferBinaryAudio: false,
-      inputAudio: { mode: 'raw', encoding: 'linear16', sampleRate: 16000, channels: 1 },
+    // Reconnecting WS — survives transient network drops without ending the call.
+    const ws = new ReconnectingVoiceSession({
+      wsUrl: WS_URL,
+      agentId: selectedAgentId,
+      token,
+      initOptions: {
+        preferBinaryAudio: false,
+        streamProtocol: true,
+        inputAudio: { mode: 'raw', encoding: 'linear16', sampleRate: 16000, channels: 1 },
+      },
+      onMessage: (event) => {
+        try {
+          if (typeof event.data === 'string') {
+            const msg = JSON.parse(event.data)
+            handleWsMessage(msg)
+          } else if (event.data instanceof ArrayBuffer) {
+            decodeAndQueueAudio(event.data)
+          } else if (event.data instanceof Blob) {
+            event.data.arrayBuffer().then((buf) => {
+              decodeAndQueueAudio(buf)
+            }).catch((e) => console.error('Binary audio parse error', e))
+          }
+        } catch (e) {
+          console.error('WS parse error', e)
+        }
+      },
+      onError: () => {
+        setStatusText('Connection blip — reconnecting...')
+      },
+      onReconnectAttempt: (attempt, delayMs) => {
+        setStatusText(`Network blip — retry ${attempt} in ${Math.round(delayMs / 100) / 10}s...`)
+      },
+      onReconnect: () => {
+        setStatusText('Reconnected ✅')
+      },
+      onGiveUp: () => {
+        setStatusText('Could not reconnect after multiple attempts.')
+        setStatus('ended')
+      },
+      onClose: (event) => {
+        // 1013 = server busy. Other clean (1000) closes also stop reconnect.
+        if (event.code === 1013) {
+          setStatusText('Server busy — too many concurrent calls. Try again in a moment.')
+        }
+        if (status !== 'ended') setStatus('ended')
+        setIsRecording(false)
+      },
     })
     wsRef.current = ws
-
-    ws.onmessage = (event) => {
-      try {
-        if (typeof event.data === 'string') {
-          const msg = JSON.parse(event.data)
-          handleWsMessage(msg)
-        } else if (event.data instanceof ArrayBuffer) {
-          decodeAndQueueAudio(event.data)
-        } else if (event.data instanceof Blob) {
-          event.data.arrayBuffer().then((buf) => {
-            decodeAndQueueAudio(buf)
-          }).catch((e) => console.error('Binary audio parse error', e))
-        }
-      } catch (e) {
-        console.error('WS parse error', e)
-      }
-    }
-
-    ws.onerror = () => {
-      setStatusText('Connection error. Is the backend running at localhost:5000?')
-      setStatus('ended')
-    }
-
-    ws.onclose = () => {
-      if (status !== 'ended') setStatus('ended')
-      setIsRecording(false)
-    }
   }
 
   const handleWsMessage = (msg: any) => {
@@ -271,20 +287,14 @@ export default function TestAgentPage() {
 
       case 'response_text':
         if (msg.text) {
+          // Replace (full) — last assistant message gets overwritten with the
+          // final canonical text. Immutable update so React detects the change.
           setMessages(prev => {
-            const newMessages = [...prev];
-            const lastMsg = newMessages[newMessages.length - 1];
-
-            if (lastMsg && lastMsg.role === 'assistant') {
-              lastMsg.content = msg.text;
-              return [...newMessages];
-            } else {
-              return [...prev, {
-                role: 'assistant',
-                content: msg.text,
-                timestamp: new Date(),
-              }];
+            const last = prev[prev.length - 1]
+            if (last && last.role === 'assistant') {
+              return [...prev.slice(0, -1), { ...last, content: msg.text }]
             }
+            return [...prev, { role: 'assistant', content: msg.text, timestamp: new Date() }]
           })
           setStatus('speaking')
           isAgentSpeakingRef.current = true;
@@ -293,20 +303,16 @@ export default function TestAgentPage() {
 
       case 'response_text_chunk':
         if (msg.text) {
+          // Append (chunk) — concatenate to the in-flight assistant message.
+          // CRITICAL: must be immutable so message ordering stays correct
+          // when chunks arrive faster than React commits.
           setMessages(prev => {
-            const newMessages = [...prev];
-            const lastMsg = newMessages[newMessages.length - 1];
-
-            if (lastMsg && lastMsg.role === 'assistant') {
-              lastMsg.content += ' ' + msg.text;
-              return [...newMessages];
-            } else {
-              return [...prev, {
-                role: 'assistant',
-                content: msg.text,
-                timestamp: new Date(),
-              }];
+            const last = prev[prev.length - 1]
+            if (last && last.role === 'assistant') {
+              const sep = last.content && !last.content.endsWith(' ') ? ' ' : ''
+              return [...prev.slice(0, -1), { ...last, content: last.content + sep + msg.text }]
             }
+            return [...prev, { role: 'assistant', content: msg.text, timestamp: new Date() }]
           });
           setStatus('speaking');
         }
@@ -314,23 +320,33 @@ export default function TestAgentPage() {
 
       case 'text_stream':
         if (msg.content) {
+          // Append (chunk) — immutable so React detects the change
+          // and ordering stays correct under fast streaming.
           setMessages(prev => {
-            const newMessages = [...prev]
-            const lastMsg = newMessages[newMessages.length - 1]
-
-            if (lastMsg && lastMsg.role === 'assistant') {
-              lastMsg.content += ' ' + msg.content
-              return [...newMessages]
+            const last = prev[prev.length - 1]
+            if (last && last.role === 'assistant') {
+              const sep = last.content && !last.content.endsWith(' ') ? ' ' : ''
+              return [...prev.slice(0, -1), { ...last, content: last.content + sep + msg.content }]
             }
-
-            return [...prev, {
-              role: 'assistant',
-              content: msg.content,
-              timestamp: new Date(),
-            }]
+            return [...prev, { role: 'assistant', content: msg.content, timestamp: new Date() }]
           })
           setStatus('speaking')
           isAgentSpeakingRef.current = true
+        }
+        break
+
+      case 'text_stream_end':
+        // Canonical full text at end of stream — replace the accumulated
+        // chunks with the authoritative version. Without this, any chunk
+        // boundary spacing differences cause visible duplication.
+        if (msg.content) {
+          setMessages(prev => {
+            const last = prev[prev.length - 1]
+            if (last && last.role === 'assistant') {
+              return [...prev.slice(0, -1), { ...last, content: msg.content }]
+            }
+            return prev
+          })
         }
         break
 
@@ -371,6 +387,11 @@ export default function TestAgentPage() {
         setStatusText(`⚠️ ${msg.message}`)
         if (status === 'connecting') {
           setStatus('ended')
+        } else if (status === 'processing') {
+          // Don't leave the UI stuck on "AI is thinking..." after an LLM
+          // failure — backend has already played a fallback line. Move
+          // back to listening so the user can speak again.
+          setStatus('listening')
         }
         break
 
@@ -449,15 +470,10 @@ export default function TestAgentPage() {
         onAudioFrame: (frame) => {
           if (wsRef.current?.readyState !== WebSocket.OPEN) return
           lastAudioChunkSentAtRef.current = Date.now()
-          wsRef.current.send(JSON.stringify({
-            type: 'audio',
-            seq: frame.seq,
-            timestamp: frame.timestamp,
-            sampleRate: frame.sampleRate,
-            encoding: 'linear16',
-            channels: frame.channels,
-            data: arrayBufferToBase64(frame.data),
-          }))
+          // Binary frame: skip JSON+base64 — saves ~33% bandwidth +
+          // base64 encode CPU cost (10 frames/sec on the hot path).
+          // Backend handleAudioChunkBinary forwards directly to Deepgram.
+          wsRef.current.send(frame.data)
         },
         onSpeechStart: () => {
           if (wsRef.current?.readyState !== WebSocket.OPEN) return
@@ -560,66 +576,54 @@ export default function TestAgentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#020617] p-6 relative overflow-hidden font-sans transition-colors duration-300">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 font-sans antialiased">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6">
 
-      {/* Cyberpunk Grid Background */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(30,41,59,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(30,41,59,0.1)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(30,41,59,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(30,41,59,0.5)_1px,transparent_1px)] bg-[size:32px_32px] opacity-20 pointer-events-none" />
-      <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-cyan-900/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-blue-900/10 rounded-full blur-[120px] pointer-events-none" />
-
-      <div className="max-w-6xl mx-auto space-y-6 relative z-10 pt-4">
-
-        {/* Header */}
-        <div className="relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-blue-500/5 rounded-3xl blur-xl" />
-          <div className="relative bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200 dark:border-slate-800/80 p-6 shadow-sm dark:shadow-[0_0_15px_rgba(6,182,212,0.05)]">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.4)]">
-                  <Terminal className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Neural Sandbox</h1>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 font-light flex items-center gap-1">
-                    Live duplex interface <Zap className="w-3 h-3 text-amber-500" />
-                  </p>
-                </div>
-              </div>
-              {isCallActive && (
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-                    <span className="text-xs font-bold tracking-widest text-emerald-700 dark:text-emerald-400">LIVE</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700">
-                    <Clock className="w-4 h-4 text-cyan-500" />
-                    <span className="text-sm font-mono font-medium">{formatDuration(callDuration)}</span>
-                  </div>
-                </div>
-              )}
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 flex items-center justify-center">
+              <Terminal className="w-4 h-4" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight">Call sandbox</h1>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Test your agent in real time</p>
             </div>
           </div>
-        </div>
+          {isCallActive && (
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-900/60">
+                <span className="relative flex w-1.5 h-1.5">
+                  <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-500 opacity-60 animate-ping" />
+                  <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                </span>
+                <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300 tracking-wide">Live</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+                <Clock className="w-3.5 h-3.5 text-zinc-400" />
+                <span className="text-xs font-mono tabular-nums text-zinc-700 dark:text-zinc-300">{formatDuration(callDuration)}</span>
+              </div>
+            </div>
+          )}
+        </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ── Main grid ──────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
 
-          {/* Control Panel */}
-          <div className="space-y-4">
+          {/* ─── Left column: controls ─── */}
+          <aside className="space-y-4 lg:space-y-3">
 
             {/* Agent selector */}
-            <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-slate-800/80 p-5 shadow-sm">
-              <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                <Bot className="w-4 h-4 text-cyan-500" /> Subject Profile
-              </h2>
+            <Card title="Agent" icon={Bot}>
               <Select
                 value={selectedAgentId}
                 onValueChange={setSelectedAgentId}
                 disabled={isCallActive}
               >
-                <SelectTrigger className="w-full h-11 bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-700/50 rounded-xl font-light text-slate-900 dark:text-slate-100 focus:ring-cyan-500/20">
-                  <SelectValue placeholder="Select a neural agent..." />
+                <SelectTrigger className="w-full h-10 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-sm font-normal focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-50/10">
+                  <SelectValue placeholder="Select an agent..." />
                 </SelectTrigger>
-                <SelectContent className="bg-white dark:bg-slate-900/95 backdrop-blur-xl rounded-xl border-slate-200 dark:border-slate-800">
+                <SelectContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md">
                   {agents.map(a => (
                     <SelectItem key={a._id} value={a._id}>{a.name}</SelectItem>
                   ))}
@@ -628,194 +632,199 @@ export default function TestAgentPage() {
                   )}
                 </SelectContent>
               </Select>
-            </div>
+            </Card>
 
             {/* Status */}
-            <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-slate-800/80 p-5 shadow-sm">
-              <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-cyan-500" /> Telemetry
-              </h2>
-              <div className="flex items-center gap-3 mb-3 p-3 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-200 dark:border-slate-800/50">
-                <div className={`w-3 h-3 rounded-full ${STATUS_COLORS[status]}`} />
-                <span className="text-sm font-medium text-slate-800 dark:text-slate-200 capitalize tracking-wide">{status}</span>
+            <Card title="Status" icon={Activity}>
+              <div className="flex items-center gap-2.5">
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[status]}`} />
+                <span className="text-sm font-medium capitalize text-zinc-900 dark:text-zinc-100">{status}</span>
               </div>
-              <p className="text-xs font-mono text-slate-600 dark:text-cyan-400/80 break-words leading-relaxed">{statusText}</p>
-            </div>
+              <p className="mt-2.5 text-xs text-zinc-500 dark:text-zinc-400 font-mono leading-relaxed break-words">{statusText}</p>
+            </Card>
 
             {/* Controls */}
-            <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-slate-800/80 p-5 space-y-4 shadow-sm">
-              <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-cyan-500" /> Operations
-              </h2>
-
+            <Card title="Controls" icon={Sparkles}>
               {!isCallActive ? (
                 <Button
                   onClick={startCall}
                   disabled={!selectedAgentId || status === 'connecting'}
-                  className="w-full h-12 bg-cyan-500 hover:bg-cyan-400 text-white dark:text-slate-950 font-bold rounded-xl shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all duration-300 hover:-translate-y-0.5"
+                  className="w-full h-10 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-zinc-50 dark:text-zinc-900 font-medium rounded-md transition-colors disabled:opacity-50"
                 >
-                  <Phone className="w-5 h-5 mr-2" />
-                  Initiate Link
+                  <Phone className="w-4 h-4 mr-2" />
+                  Start call
                 </Button>
               ) : (
                 <Button
                   onClick={endCall}
-                  className="w-full h-12 bg-red-500 hover:bg-red-400 text-white font-bold rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all duration-300"
+                  className="w-full h-10 bg-red-600 hover:bg-red-500 text-white font-medium rounded-md transition-colors"
                 >
-                  <PhoneOff className="w-5 h-5 mr-2" />
-                  Terminate Link
+                  <PhoneOff className="w-4 h-4 mr-2" />
+                  End call
                 </Button>
               )}
 
-              {/* Script Simulator Dialog */}
+              {/* Script Simulator */}
               <Dialog open={isScriptModalOpen} onOpenChange={setIsScriptModalOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="w-full h-11 border-slate-300 dark:border-slate-700 font-medium rounded-xl gap-2 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-all text-slate-700 dark:text-slate-300 bg-transparent">
-                    <PlayCircle className="w-4 h-4 text-cyan-500" />
-                    Automated Script
+                  <Button
+                    variant="outline"
+                    className="w-full h-10 mt-2 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium rounded-md gap-2 transition-colors"
+                  >
+                    <PlayCircle className="w-4 h-4" />
+                    Run script
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+                <DialogContent className="sm:max-w-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-50">
                   <DialogHeader>
-                    <DialogTitle className="text-cyan-600 dark:text-cyan-400">Simulate Conversation</DialogTitle>
-                    <DialogDescription className="text-slate-600 dark:text-slate-400">
-                      Paste a script or a list of user responses. The simulator will automatically send each line as a text message, waiting for the agent to reply before sending the next one.
+                    <DialogTitle className="text-zinc-900 dark:text-zinc-50">Simulate conversation</DialogTitle>
+                    <DialogDescription className="text-zinc-500 dark:text-zinc-400">
+                      Paste a script — each line is sent as a user message after the agent finishes speaking.
                     </DialogDescription>
                   </DialogHeader>
-                  <div className="py-4">
+                  <div className="py-2">
                     <Textarea
-                      placeholder="e.g.&#10;Hello, I need help with my account.&#10;Yes, my email is john@example.com&#10;Thank you!"
-                      className="min-h-[200px] resize-none font-mono text-sm bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:border-cyan-500/50 focus:ring-cyan-500/20"
+                      placeholder={"Hello, I need help with my account.\nMy email is john@example.com\nThanks!"}
+                      className="min-h-[200px] resize-none font-mono text-sm bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 focus:border-zinc-400 dark:focus:border-zinc-600 focus:ring-2 focus:ring-zinc-900/5 dark:focus:ring-zinc-50/5"
                       value={scriptText}
                       onChange={(e) => setScriptText(e.target.value)}
                     />
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" className="border-slate-200 dark:border-slate-700" onClick={() => setIsScriptModalOpen(false)}>Cancel</Button>
+                    <Button variant="outline" className="border-zinc-200 dark:border-zinc-800" onClick={() => setIsScriptModalOpen(false)}>Cancel</Button>
                     <Button
                       onClick={startSimulation}
                       disabled={!scriptText.trim() || !selectedAgentId}
-                      className="bg-cyan-500 hover:bg-cyan-400 text-white dark:text-slate-950 font-bold"
+                      className="bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-zinc-50 dark:text-zinc-900 font-medium"
                     >
-                      Start Simulation
+                      Start simulation
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
 
               {isSimulating && (
-                <div className="p-3 bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-800/50 rounded-xl flex items-center justify-between animate-pulse">
-                  <span className="text-xs font-medium text-cyan-700 dark:text-cyan-300">Auto-Script Active ({simulationQueueRef.current.length} left)</span>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] text-cyan-700 hover:bg-cyan-200 dark:hover:bg-cyan-900" onClick={() => setIsSimulating(false)}>Stop</Button>
+                <div className="mt-2 px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md flex items-center justify-between">
+                  <span className="text-xs text-zinc-700 dark:text-zinc-300">Script · {simulationQueueRef.current.length} left</span>
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                    onClick={() => setIsSimulating(false)}
+                  >
+                    Stop
+                  </button>
                 </div>
               )}
 
               {isCallActive && (
-                <>
-                  {/* Continuous Voice Indicator */}
-                  <div className={`w-full h-16 rounded-xl font-medium transition-all duration-300 flex flex-col items-center justify-center gap-1 ${isRecording
-                      ? 'bg-cyan-500 text-white dark:text-slate-950 shadow-[0_0_20px_rgba(6,182,212,0.4)] relative overflow-hidden'
-                      : 'bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                <div className="mt-3 space-y-2">
+                  {/* Recording indicator */}
+                  <div className={`h-12 rounded-md flex items-center justify-center gap-2 transition-colors border ${isRecording
+                    ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/60 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400'
+                  }`}>
+                    {isRecording ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                    <span className="text-xs font-medium">{isRecording ? 'Listening' : 'Mic off'}</span>
+                  </div>
+
+                  {/* Mute toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setIsMuted(!isMuted)}
+                    className={`w-full h-9 rounded-md border text-xs font-medium flex items-center justify-center gap-2 transition-colors ${isMuted
+                      ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300'
+                      : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                     }`}
                   >
-                    {isRecording && <div className="absolute inset-0 bg-white/20 animate-pulse pointer-events-none" />}
-                    {isRecording ? <Mic className="w-6 h-6 animate-bounce" /> : <MicOff className="w-5 h-5" />}
-                    <span className="text-xs relative z-10 tracking-widest uppercase">{isRecording ? 'Listening' : 'Mic Off'}</span>
-                  </div>
-
-                  <button
-                    onClick={() => setIsMuted(!isMuted)}
-                    className={`w-full h-10 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all ${isMuted
-                        ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50'
-                        : 'bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800/50'
-                      }`}
-                  >
-                    {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                    {isMuted ? 'Agent Muted' : 'Mute Agent'}
+                    {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                    {isMuted ? 'Agent muted' : 'Mute agent'}
                   </button>
-                </>
+                </div>
               )}
-            </div>
+            </Card>
 
-            {/* Transfer Banner */}
+            {/* Transfer banner */}
             {transferInfo && (
-              <div className="bg-gradient-to-r from-amber-50 dark:from-amber-500/10 to-orange-50 dark:to-orange-500/10 rounded-2xl border border-amber-200 dark:border-amber-500/30 p-5 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center">
-                    <Phone className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              <div className="p-3.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0">
+                    <Phone className="w-4 h-4 text-amber-700 dark:text-amber-400" />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-amber-700 dark:text-amber-400">Transfer Initiated</h3>
-                    <p className="text-xs font-medium text-amber-600/80 dark:text-amber-400/80 mt-0.5">
-                      Target: {transferInfo.transferTo}
-                    </p>
-                    <p className="text-[10px] font-mono text-amber-600/60 mt-1">Reason: {transferInfo.reason}</p>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200">Transfer initiated</h3>
+                    <p className="text-xs text-amber-800 dark:text-amber-300/80 mt-0.5">→ {transferInfo.transferTo}</p>
+                    <p className="text-[11px] font-mono text-amber-700/70 dark:text-amber-400/60 mt-1 break-words">{transferInfo.reason}</p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Live Sentiment Indicator */}
+            {/* Sentiment */}
             {isCallActive && (
-              <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-slate-800/80 p-5 shadow-sm">
-                <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2">
-                  <Heart className="w-4 h-4 text-pink-500" />
-                  Emotional Analytics
-                </h2>
-
+              <Card title="Sentiment" icon={Heart}>
                 {liveSentiment ? (
-                  <div className="space-y-4">
-                    {/* Current Sentiment */}
-                    <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-950/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-inner ${liveSentiment.sentiment === 'positive'
-                          ? 'bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50'
-                          : liveSentiment.sentiment === 'negative'
-                            ? 'bg-red-100 dark:bg-red-950/40 border border-red-200 dark:border-red-800/50'
-                            : 'bg-amber-100 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50'
-                        }`}>
-                        {liveSentiment.sentiment === 'positive' ? '😊' : liveSentiment.sentiment === 'negative' ? '😠' : '😐'}
-                      </div>
-                      <div className="flex-1">
-                        <p className={`text-sm font-bold uppercase tracking-wider ${liveSentiment.sentiment === 'positive'
-                            ? 'text-emerald-600 dark:text-emerald-400'
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-9 h-9 rounded-md flex items-center justify-center text-lg ${
+                          liveSentiment.sentiment === 'positive'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40'
                             : liveSentiment.sentiment === 'negative'
-                              ? 'text-red-600 dark:text-red-400'
-                              : 'text-amber-600 dark:text-amber-400'
-                          }`}>
+                            ? 'bg-red-50 dark:bg-red-950/40'
+                            : 'bg-zinc-50 dark:bg-zinc-900'
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {liveSentiment.sentiment === 'positive' ? '🙂' : liveSentiment.sentiment === 'negative' ? '🙁' : '😐'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className={`text-sm font-semibold capitalize ${
+                            liveSentiment.sentiment === 'positive'
+                              ? 'text-emerald-700 dark:text-emerald-400'
+                              : liveSentiment.sentiment === 'negative'
+                              ? 'text-red-700 dark:text-red-400'
+                              : 'text-zinc-700 dark:text-zinc-300'
+                          }`}
+                        >
                           {liveSentiment.sentiment}
                         </p>
-                        <p className="text-xs text-slate-500 font-mono mt-1">Confidence: {liveSentiment.score?.toFixed(2)}</p>
+                        <p className="text-[11px] text-zinc-500 font-mono tabular-nums mt-0.5">
+                          {(liveSentiment.score >= 0 ? '+' : '') + liveSentiment.score?.toFixed(2)}
+                        </p>
                       </div>
-                      {liveSentiment.sentiment === 'positive' && <TrendingUp className="w-5 h-5 text-emerald-500" />}
-                      {liveSentiment.sentiment === 'negative' && <TrendingDown className="w-5 h-5 text-red-500" />}
-                      {liveSentiment.sentiment === 'neutral' && <Minus className="w-5 h-5 text-amber-500" />}
+                      {liveSentiment.sentiment === 'positive' && <TrendingUp className="w-4 h-4 text-emerald-500" />}
+                      {liveSentiment.sentiment === 'negative' && <TrendingDown className="w-4 h-4 text-red-500" />}
+                      {liveSentiment.sentiment === 'neutral' && <Minus className="w-4 h-4 text-zinc-400" />}
                     </div>
 
-                    {/* Score Bar */}
-                    <div className="relative h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                    {/* Score bar */}
+                    <div className="relative h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden" aria-label={`Sentiment score ${liveSentiment.score?.toFixed(2)}`}>
                       <div
-                        className={`absolute top-0 left-1/2 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_currentColor] ${liveSentiment.score >= 0 ? 'bg-emerald-500 text-emerald-500' : 'bg-red-500 text-red-500'
-                          }`}
+                        className={`absolute top-0 left-1/2 h-full rounded-full transition-all duration-500 ${
+                          liveSentiment.score >= 0 ? 'bg-emerald-500' : 'bg-red-500'
+                        }`}
                         style={{
                           width: `${Math.abs(liveSentiment.score) * 50}%`,
                           transform: liveSentiment.score >= 0 ? 'none' : 'translateX(-100%)',
                         }}
                       />
-                      <div className="absolute top-0 left-1/2 w-0.5 h-full bg-slate-400 dark:bg-slate-600" />
+                      <div className="absolute top-0 left-1/2 w-px h-full bg-zinc-300 dark:bg-zinc-700" />
                     </div>
 
-                    {/* Sentiment Timeline Dots */}
+                    {/* Timeline dots */}
                     {sentimentHistory.length > 1 && (
-                      <div className="flex items-center gap-1.5 flex-wrap pt-2">
+                      <div className="flex items-center gap-1 flex-wrap pt-0.5">
                         {sentimentHistory.slice(-12).map((s, i) => (
                           <div
                             key={i}
-                            className={`w-3 h-3 rounded-full transition-all duration-300 shadow-sm ${s.sentiment === 'positive'
-                                ? 'bg-emerald-500 shadow-emerald-500/50'
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              s.sentiment === 'positive'
+                                ? 'bg-emerald-500'
                                 : s.sentiment === 'negative'
-                                  ? 'bg-red-500 shadow-red-500/50'
-                                  : 'bg-amber-500 shadow-amber-500/50'
-                              }`}
+                                ? 'bg-red-500'
+                                : 'bg-zinc-300 dark:bg-zinc-700'
+                            }`}
                             title={`${s.sentiment}: ${s.text?.substring(0, 50)}...`}
                           />
                         ))}
@@ -823,57 +832,54 @@ export default function TestAgentPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="h-24 flex items-center justify-center border border-dashed border-slate-300 dark:border-slate-800 rounded-xl">
-                    <p className="text-xs text-slate-500 font-mono">Awaiting emotional context...</p>
-                  </div>
+                  <p className="text-xs text-zinc-400 py-1">Waiting for first user message...</p>
                 )}
-              </div>
+              </Card>
             )}
-          </div>
+          </aside>
 
-          {/* Conversation Stream */}
-          <div className="lg:col-span-2 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-slate-800/80 flex flex-col shadow-sm" style={{ height: '700px' }}>
-            {/* Header */}
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center gap-3 bg-slate-50/50 dark:bg-slate-950/50 rounded-t-2xl">
-              <div className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 flex items-center justify-center">
-                <MessageSquare className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-              </div>
-              <h2 className="text-sm font-medium text-slate-800 dark:text-slate-200">Neural Transcript</h2>
-              <div className="ml-auto flex items-center gap-2 bg-white dark:bg-slate-900 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm">
-                <Activity className="w-3.5 h-3.5 text-cyan-500" />
-                <span className="text-xs text-slate-600 dark:text-slate-300 font-mono font-medium">{messages.length} blocks</span>
-              </div>
+          {/* ─── Right column: transcript ─── */}
+          <section className="lg:col-span-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg flex flex-col min-h-[60vh] lg:h-[700px] overflow-hidden">
+
+            {/* Transcript header */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+              <MessageSquare className="w-4 h-4 text-zinc-400" />
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Transcript</h2>
+              <span className="text-xs text-zinc-400 tabular-nums">· {messages.length}</span>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
               {messages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center opacity-70">
-                  <div className="w-20 h-20 rounded-3xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 flex items-center justify-center mb-6 shadow-inner">
-                    <Bot className="w-10 h-10 text-cyan-500" />
+                <div className="h-full flex flex-col items-center justify-center text-center px-4">
+                  <div className="w-12 h-12 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
+                    <Bot className="w-5 h-5 text-zinc-400" />
                   </div>
-                  <h3 className="text-lg font-medium text-slate-800 dark:text-slate-200 mb-2">Connection Standby</h3>
-                  <p className="text-slate-500 dark:text-slate-400 font-light text-sm max-w-sm">
-                    {isCallActive ? 'Audio channel open. Speak into your microphone to transmit data.' : 'Select a neural agent and initialize link to begin duplex communication.'}
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
+                    {isCallActive ? 'Listening...' : 'Standing by'}
+                  </h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-xs leading-relaxed">
+                    {isCallActive
+                      ? 'Speak into your microphone. Your transcript will appear here.'
+                      : 'Pick an agent and start a call to begin a conversation.'}
                   </p>
                 </div>
               ) : (
                 messages.map((msg, i) => (
-                  <div key={i} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg ${msg.role === 'user'
-                        ? 'bg-slate-800 dark:bg-slate-200'
-                        : 'bg-cyan-500 shadow-cyan-500/30'
-                      }`}>
-                      {msg.role === 'user' ? <User className="w-5 h-5 text-white dark:text-slate-900" /> : <Bot className="w-5 h-5 text-white" />}
+                  <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-1 duration-200`}>
+                    <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${msg.role === 'user'
+                      ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'
+                      : 'bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900'
+                    }`}>
+                      {msg.role === 'user' ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
                     </div>
-                    <div className={`max-w-[75%] rounded-2xl px-5 py-4 shadow-sm ${msg.role === 'user'
-                        ? 'bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-tr-sm'
-                        : 'bg-cyan-50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-900/50 rounded-tl-sm'
-                      }`}>
-                      <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium">{msg.content}</p>
-                      <div className={`flex items-center gap-1.5 mt-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <Clock className="w-3 h-3 text-slate-400" />
-                        <span className="text-[10px] text-slate-500 font-mono">
+                    <div className={`max-w-[85%] sm:max-w-[80%] rounded-lg px-3.5 py-2.5 ${msg.role === 'user'
+                      ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
+                      : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100'
+                    }`}>
+                      <p className="text-sm leading-relaxed">{msg.content}</p>
+                      <div className={`flex items-center gap-1 mt-1.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <span className="text-[10px] text-zinc-400 font-mono tabular-nums">
                           {new Date(msg.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </span>
                       </div>
@@ -885,28 +891,42 @@ export default function TestAgentPage() {
             </div>
 
             {/* Text input */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/50 rounded-b-2xl">
-              <div className="flex gap-3">
+            <div className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/30">
+              <div className="flex gap-2">
                 <Input
-                  placeholder={isCallActive ? "Transmit text data to agent..." : "Initialize link to transmit..."}
+                  placeholder={isCallActive ? 'Type a message...' : 'Start a call to chat'}
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && sendTextMessage()}
                   disabled={!isCallActive || status === 'processing'}
-                  className="flex-1 h-12 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-xl font-mono text-sm focus:border-cyan-500/50 focus:ring-cyan-500/20 shadow-inner"
+                  className="flex-1 h-10 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-md text-sm focus:border-zinc-400 dark:focus:border-zinc-600 focus:ring-2 focus:ring-zinc-900/5 dark:focus:ring-zinc-50/5"
                 />
                 <Button
                   onClick={sendTextMessage}
                   disabled={!isCallActive || !textInput.trim() || status === 'processing'}
-                  className="h-12 w-16 bg-cyan-500 hover:bg-cyan-400 text-white dark:text-slate-950 rounded-xl shadow-[0_0_10px_rgba(6,182,212,0.3)] transition-all"
+                  className="h-10 px-4 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-50 dark:hover:bg-zinc-200 text-zinc-50 dark:text-zinc-900 rounded-md"
+                  aria-label="Send message"
                 >
-                  <Send className="w-5 h-5" />
+                  <Send className="w-4 h-4" />
                 </Button>
               </div>
             </div>
-          </div>
+          </section>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** Tiny card primitive — single source of truth for left-column blocks. */
+function Card({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Icon className="w-3.5 h-3.5 text-zinc-400" />
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{title}</h2>
+      </div>
+      {children}
     </div>
   )
 }
