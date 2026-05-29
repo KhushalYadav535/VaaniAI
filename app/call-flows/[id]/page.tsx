@@ -31,7 +31,7 @@ import { toast } from 'react-hot-toast';
 import {
   Save, ArrowLeft, Play, MessageSquare, Mic, HelpCircle, Phone, ArrowRightCircle,
   Webhook, Clock, Variable, Trash2, X, ChevronRight, Zap, Network,
-  Search, GripVertical, Copy, Keyboard,
+  Search, GripVertical, Copy, Keyboard, Hash, GitBranch, Brain, FileSearch, UserPlus, Plus,
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -42,16 +42,21 @@ const NODE_CATALOG = {
   conversation: [
     { type: 'speak',    label: 'AI Speak',       icon: MessageSquare, color: '#8b5cf6', desc: 'Agent says something' },
     { type: 'gather',   label: 'Gather Input',   icon: Mic,           color: '#f59e0b', desc: 'Listen & capture user input' },
+    { type: 'dtmf',     label: 'DTMF Keypad',    icon: Hash,          color: '#fb923c', desc: 'Capture phone keypad digits' },
+    { type: 'llm',      label: 'LLM Turn',       icon: Brain,         color: '#a855f7', desc: 'One open-ended LLM response' },
   ],
   logic: [
-    { type: 'condition', label: 'Condition',      icon: HelpCircle,    color: '#3b82f6', desc: 'Branch on a variable' },
-    { type: 'setvar',    label: 'Set Variable',   icon: Variable,      color: '#06b6d4', desc: 'Set or update a variable' },
-    { type: 'wait',      label: 'Wait / Delay',   icon: Clock,         color: '#6366f1', desc: 'Pause before next step' },
+    { type: 'condition',    label: 'Condition',     icon: HelpCircle,    color: '#3b82f6', desc: 'Branch on a variable' },
+    { type: 'switch',       label: 'Switch / Multi-case', icon: GitBranch, color: '#0ea5e9', desc: 'Multi-way routing on a variable' },
+    { type: 'set_variable', label: 'Set Variable',  icon: Variable,      color: '#06b6d4', desc: 'Set or update a variable' },
+    { type: 'extract',      label: 'Extract Data',  icon: FileSearch,    color: '#0d9488', desc: 'LLM-powered structured extraction' },
+    { type: 'wait',         label: 'Wait / Delay',  icon: Clock,         color: '#6366f1', desc: 'Pause before next step' },
   ],
   actions: [
-    { type: 'transfer',  label: 'Transfer Call',  icon: Phone,         color: '#ec4899', desc: 'Transfer to human agent' },
-    { type: 'webhook',   label: 'Webhook / API',  icon: Webhook,       color: '#10b981', desc: 'Call external API' },
-    { type: 'end',       label: 'End Call',        icon: ArrowRightCircle, color: '#ef4444', desc: 'Hang up the call' },
+    { type: 'transfer',       label: 'Transfer Call',   icon: Phone,    color: '#ec4899', desc: 'Transfer to human agent' },
+    { type: 'transfer_agent', label: 'Squad Handoff',   icon: UserPlus, color: '#d946ef', desc: 'Transfer to another AI agent' },
+    { type: 'webhook',        label: 'Webhook / API',   icon: Webhook,  color: '#10b981', desc: 'Call external API' },
+    { type: 'end',            label: 'End Call',        icon: ArrowRightCircle, color: '#ef4444', desc: 'Hang up the call' },
   ],
 };
 
@@ -162,14 +167,123 @@ const ConditionNode = ({ data, selected }: NodeProps) => {
 const SetVarNode = ({ data, selected }: NodeProps) => {
   const d = data as any;
   return (
-    <NodeShell selected={selected} color="#06b6d4" type="setvar" label="Set Variable" icon={Variable}>
+    <NodeShell selected={selected} color="#06b6d4" type="set_variable" label="Set Variable" icon={Variable}>
       <Handle type="target" position={Position.Top} className={`${handleBase} !bg-cyan-500`} />
       <div className="flex items-center gap-2">
-        <code className="text-[11px] text-cyan-400/90 font-mono bg-cyan-500/10 px-1.5 py-0.5 rounded">{d.variable || 'var'}</code>
+        <code className="text-[11px] text-cyan-400/90 font-mono bg-cyan-500/10 px-1.5 py-0.5 rounded">{d.name || d.variable || 'var'}</code>
         <span className="text-white/30 text-[10px]">=</span>
         <code className="text-[11px] text-white/50 font-mono truncate">{d.value || '""'}</code>
       </div>
       <Handle type="source" position={Position.Bottom} className={`${handleBase} !bg-cyan-500`} />
+    </NodeShell>
+  );
+};
+
+const DtmfNode = ({ data, selected }: NodeProps) => {
+  const d = data as any;
+  const routes = d.routes && typeof d.routes === 'object' ? Object.keys(d.routes) : [];
+  return (
+    <NodeShell selected={selected} color="#fb923c" type="dtmf" label="DTMF Keypad" icon={Hash}>
+      <Handle type="target" position={Position.Top} className={`${handleBase} !bg-orange-400`} />
+      <div className="space-y-1.5">
+        <div className="text-[10px] text-white/40 line-clamp-2">{d.prompt || 'Press a key...'}</div>
+        <code className="text-[11px] text-orange-400/90 font-mono bg-orange-500/10 px-1.5 py-0.5 rounded inline-block">
+          → {d.variable || 'dtmf_digits'}
+        </code>
+      </div>
+      {routes.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 mt-3 pt-2 border-t border-white/[0.05]">
+          {routes.map((k) => (
+            <div key={k} className="flex flex-col items-center gap-1">
+              <Handle type="source" position={Position.Bottom} id={k} style={{ position: 'relative', left: 0, transform: 'none' }} className={`${handleBase} !bg-orange-400 !relative`} />
+              <span className="text-[8px] font-bold text-orange-400 uppercase tracking-wider">{k}</span>
+            </div>
+          ))}
+          <div className="flex flex-col items-center gap-1">
+            <Handle type="source" position={Position.Bottom} id="default" style={{ position: 'relative', left: 0, transform: 'none' }} className={`${handleBase} !bg-white/30 !relative`} />
+            <span className="text-[8px] font-bold text-white/40 uppercase tracking-wider">def</span>
+          </div>
+        </div>
+      ) : (
+        <Handle type="source" position={Position.Bottom} className={`${handleBase} !bg-orange-400`} />
+      )}
+    </NodeShell>
+  );
+};
+
+const SwitchNode = ({ data, selected }: NodeProps) => {
+  const d = data as any;
+  const cases = Array.isArray(d.cases) ? d.cases : [];
+  return (
+    <NodeShell selected={selected} color="#0ea5e9" type="switch" label="Switch" icon={GitBranch}>
+      <Handle type="target" position={Position.Top} className={`${handleBase} !bg-sky-500`} />
+      <div className="text-[11px] text-center font-mono text-sky-400/80 bg-sky-500/10 border border-sky-500/15 p-2 rounded-lg mb-2">
+        switch ({d.variable || '?'})
+      </div>
+      <div className="flex flex-wrap gap-1.5 mt-2">
+        {cases.map((c: any) => (
+          <div key={c.value} className="flex flex-col items-center gap-1">
+            <Handle type="source" position={Position.Bottom} id={`case_${c.value}`} style={{ position: 'relative', left: 0, transform: 'none' }} className={`${handleBase} !bg-sky-500 !relative`} />
+            <span className="text-[8px] font-bold text-sky-400 uppercase tracking-wider">{String(c.value).slice(0, 8)}</span>
+          </div>
+        ))}
+        <div className="flex flex-col items-center gap-1">
+          <Handle type="source" position={Position.Bottom} id="default" style={{ position: 'relative', left: 0, transform: 'none' }} className={`${handleBase} !bg-white/30 !relative`} />
+          <span className="text-[8px] font-bold text-white/40 uppercase tracking-wider">def</span>
+        </div>
+      </div>
+    </NodeShell>
+  );
+};
+
+const LlmNode = ({ data, selected }: NodeProps) => {
+  const d = data as any;
+  return (
+    <NodeShell selected={selected} color="#a855f7" type="llm" label="LLM Turn" icon={Brain}>
+      <Handle type="target" position={Position.Top} className={`${handleBase} !bg-purple-500`} />
+      <div className="space-y-1.5">
+        <div className="text-[10px] text-purple-300/60 line-clamp-2 italic">{d.prompt || d.system || 'Open-ended LLM response...'}</div>
+        {d.resultVariable && (
+          <code className="text-[10px] text-purple-400/70 font-mono">→ {d.resultVariable}</code>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} className={`${handleBase} !bg-purple-500`} />
+      <Handle type="source" position={Position.Right} id="error" className={`${handleBase} !bg-red-500`} />
+    </NodeShell>
+  );
+};
+
+const ExtractNode = ({ data, selected }: NodeProps) => {
+  const d = data as any;
+  const fields = Array.isArray(d.schema) ? d.schema : [];
+  return (
+    <NodeShell selected={selected} color="#0d9488" type="extract" label="Extract Data" icon={FileSearch}>
+      <Handle type="target" position={Position.Top} className={`${handleBase} !bg-teal-500`} />
+      <div className="space-y-1.5">
+        <div className="text-[10px] text-teal-400/60">{fields.length} field{fields.length !== 1 ? 's' : ''} configured</div>
+        {fields.slice(0, 3).map((f: any) => (
+          <code key={f.name} className="text-[10px] text-teal-400/80 font-mono bg-teal-500/10 px-1.5 py-0.5 rounded inline-block mr-1">
+            {f.name}:{f.type || 'string'}
+          </code>
+        ))}
+      </div>
+      <Handle type="source" position={Position.Bottom} className={`${handleBase} !bg-teal-500`} />
+      <Handle type="source" position={Position.Right} id="error" className={`${handleBase} !bg-red-500`} />
+    </NodeShell>
+  );
+};
+
+const TransferAgentNode = ({ data, selected }: NodeProps) => {
+  const d = data as any;
+  return (
+    <NodeShell selected={selected} color="#d946ef" type="transfer_agent" label="Squad Handoff" icon={UserPlus}>
+      <Handle type="target" position={Position.Top} className={`${handleBase} !bg-fuchsia-500`} />
+      <div className="space-y-1">
+        <code className="text-[10px] text-fuchsia-400/80 font-mono bg-fuchsia-500/10 px-1.5 py-0.5 rounded inline-block">
+          → {d.agentName || (d.agentId ? d.agentId.slice(0, 8) + '...' : 'select agent')}
+        </code>
+        {d.reason && <div className="text-[10px] text-white/30">{d.reason}</div>}
+      </div>
     </NodeShell>
   );
 };
@@ -231,10 +345,16 @@ const nodeTypes = {
   trigger: TriggerNode,
   speak: SpeakNode,
   gather: GatherNode,
+  dtmf: DtmfNode,
+  llm: LlmNode,
   condition: ConditionNode,
-  setvar: SetVarNode,
+  switch: SwitchNode,
+  set_variable: SetVarNode,
+  setvar: SetVarNode, // legacy alias for old saved flows
+  extract: ExtractNode,
   wait: WaitNode,
   transfer: TransferNode,
+  transfer_agent: TransferAgentNode,
   webhook: WebhookNode,
   end: EndNode,
 };
@@ -271,15 +391,21 @@ function DragItem({ type, label, icon: Icon, color, desc }: { type: string; labe
 
 const getDefaultDataForType = (type: string) => {
   switch (type) {
-    case 'speak':     return { text: 'Hello, how can I help you today?' };
-    case 'gather':    return { prompt: 'Please say your account number.', variable: 'account_number', expectedType: 'text' };
-    case 'condition': return { variable: 'account_number', operator: 'exists', value: '' };
-    case 'setvar':    return { variable: 'status', value: 'active' };
-    case 'wait':      return { seconds: 3 };
-    case 'transfer':  return { transferTo: '+1234567890', reason: 'User requested human agent' };
-    case 'webhook':   return { method: 'POST', url: 'https://api.example.com/webhook', body: '{}', saveAs: 'api_result' };
-    case 'end':       return { message: 'Goodbye!' };
-    default:          return {};
+    case 'speak':          return { text: 'Hello, how can I help you today?' };
+    case 'gather':         return { prompt: 'Please say your account number.', variable: 'account_number', expectedType: 'text' };
+    case 'dtmf':           return { prompt: 'Press 1 for sales, 2 for support.', variable: 'menu_choice', routes: { '1': 'sales', '2': 'support' } };
+    case 'llm':            return { prompt: '', system: 'You are a helpful voice agent.', model: 'llama-3.1-8b-instant', temperature: 0.4, resultVariable: '' };
+    case 'condition':      return { variable: 'account_number', operator: 'exists', value: '' };
+    case 'switch':         return { variable: 'menu_choice', cases: [{ value: 'sales' }, { value: 'support' }] };
+    case 'set_variable':   return { name: 'status', value: 'active' };
+    case 'setvar':         return { name: 'status', value: 'active' }; // legacy
+    case 'extract':        return { schema: [{ name: 'name', type: 'string' }, { name: 'email', type: 'string' }], resultVariable: 'extracted' };
+    case 'wait':           return { seconds: 3 };
+    case 'transfer':       return { transferTo: '+1234567890', reason: 'User requested human agent' };
+    case 'transfer_agent': return { agentId: '', agentName: '', reason: 'Squad routing' };
+    case 'webhook':        return { method: 'POST', url: 'https://api.example.com/webhook', body: '{}', resultVariable: 'api_result', timeoutMs: 8000, maxRetries: 0 };
+    case 'end':            return { message: 'Goodbye!' };
+    default:               return {};
   }
 };
 
@@ -610,14 +736,190 @@ function FlowEditor() {
               </>)}
 
               {/* -- Set Variable -- */}
-              {selectedNode.type === 'setvar' && (<>
+              {(selectedNode.type === 'set_variable' || selectedNode.type === 'setvar') && (<>
                 <PropSection label="Variable Name">
-                  <Input value={selectedNode.data.variable} onChange={(e) => updateNodeData('variable', e.target.value)}
+                  <Input value={selectedNode.data.name || selectedNode.data.variable || ''}
+                    onChange={(e) => { updateNodeData('name', e.target.value); updateNodeData('variable', e.target.value); }}
                     className="bg-white/[0.03] border-white/[0.06] text-cyan-400/90 text-[12px] font-mono rounded-xl h-10 focus:border-cyan-500/30" placeholder="e.g. status" />
                 </PropSection>
-                <PropSection label="Value">
+                <PropSection label="Value" hint="Use {{variable}} for substitution">
                   <Input value={selectedNode.data.value} onChange={(e) => updateNodeData('value', e.target.value)}
-                    className="bg-white/[0.03] border-white/[0.06] text-white/70 text-[12px] rounded-xl h-10 focus:border-cyan-500/30" placeholder="e.g. active" />
+                    className="bg-white/[0.03] border-white/[0.06] text-white/70 text-[12px] rounded-xl h-10 focus:border-cyan-500/30" placeholder="e.g. active or {{user.name}}" />
+                </PropSection>
+              </>)}
+
+              {/* -- DTMF -- */}
+              {selectedNode.type === 'dtmf' && (<>
+                <PropSection label="Prompt">
+                  <Textarea value={selectedNode.data.prompt} onChange={(e) => updateNodeData('prompt', e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] text-white/80 text-[12px] rounded-xl min-h-[80px] focus:border-orange-500/30"
+                    placeholder="Press 1 for sales, 2 for support" />
+                </PropSection>
+                <PropSection label="Save digits as">
+                  <Input value={selectedNode.data.variable} onChange={(e) => updateNodeData('variable', e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] text-orange-400/90 text-[12px] font-mono rounded-xl h-10 focus:border-orange-500/30"
+                    placeholder="e.g. menu_choice" />
+                </PropSection>
+                <PropSection label="Routes (digit → handle)" hint="Each entry creates a routing handle on the node">
+                  <div className="space-y-2">
+                    {Object.entries(selectedNode.data.routes || {}).map(([digit, handle]) => (
+                      <div key={digit} className="flex gap-2 items-center">
+                        <Input value={digit} disabled className="bg-white/[0.02] border-white/[0.04] text-orange-400 text-[11px] font-mono rounded-lg h-9 w-16" />
+                        <Input value={String(handle)}
+                          onChange={(e) => {
+                            const routes = { ...(selectedNode.data.routes || {}), [digit]: e.target.value };
+                            updateNodeData('routes', routes);
+                          }}
+                          className="bg-white/[0.03] border-white/[0.06] text-white/70 text-[11px] rounded-lg h-9 flex-1" />
+                        <button type="button" title="Remove digit route" onClick={() => {
+                          const r = { ...(selectedNode.data.routes || {}) }; delete r[digit];
+                          updateNodeData('routes', r);
+                        }} className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/30 hover:text-red-400">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => {
+                      const existing = Object.keys(selectedNode.data.routes || {});
+                      const next = ['1','2','3','4','5','6','7','8','9','0','*','#'].find(d => !existing.includes(d)) || 'x';
+                      updateNodeData('routes', { ...(selectedNode.data.routes || {}), [next]: `route_${next}` });
+                    }} className="text-[11px] text-orange-400 hover:text-orange-300 flex items-center gap-1.5">
+                      <Plus className="w-3 h-3" /> Add digit route
+                    </button>
+                  </div>
+                </PropSection>
+              </>)}
+
+              {/* -- LLM -- */}
+              {selectedNode.type === 'llm' && (<>
+                <PropSection label="System Prompt">
+                  <Textarea value={selectedNode.data.system} onChange={(e) => updateNodeData('system', e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] text-white/80 text-[12px] rounded-xl min-h-[80px] focus:border-purple-500/30"
+                    placeholder="You are a helpful voice agent." />
+                </PropSection>
+                <PropSection label="User Prompt (uses transcript if empty)">
+                  <Textarea value={selectedNode.data.prompt} onChange={(e) => updateNodeData('prompt', e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] text-white/80 text-[12px] rounded-xl min-h-[60px] focus:border-purple-500/30" />
+                </PropSection>
+                <PropSection label="Model">
+                  <Select value={selectedNode.data.model || 'llama-3.1-8b-instant'} onValueChange={(v) => updateNodeData('model', v)}>
+                    <SelectTrigger className="bg-white/[0.03] border-white/[0.06] text-white/70 text-[12px] rounded-xl h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-[#1a1a2e] border-white/[0.08] text-white/80 rounded-xl">
+                      <SelectItem value="llama-3.1-8b-instant">Llama 3.1 8B (fast)</SelectItem>
+                      <SelectItem value="llama-3.3-70b-versatile">Llama 3.3 70B (smart)</SelectItem>
+                      <SelectItem value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B</SelectItem>
+                      <SelectItem value="openai/gpt-oss-20b">GPT-OSS 20B</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </PropSection>
+                <PropSection label="Save response as variable">
+                  <Input value={selectedNode.data.resultVariable} onChange={(e) => updateNodeData('resultVariable', e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] text-purple-400/80 text-[12px] font-mono rounded-xl h-10 focus:border-purple-500/30"
+                    placeholder="e.g. agent_reply" />
+                </PropSection>
+              </>)}
+
+              {/* -- Switch (multi-case) -- */}
+              {selectedNode.type === 'switch' && (<>
+                <PropSection label="Variable to test">
+                  <Input value={selectedNode.data.variable} onChange={(e) => updateNodeData('variable', e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] text-sky-400/90 text-[12px] font-mono rounded-xl h-10 focus:border-sky-500/30" />
+                </PropSection>
+                <PropSection label="Cases" hint="Each case becomes a routing handle. Unmatched values fall through to 'default'.">
+                  <div className="space-y-2">
+                    {(Array.isArray(selectedNode.data.cases) ? selectedNode.data.cases : []).map((c: any, idx: number) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <Input value={c.value}
+                          onChange={(e) => {
+                            const cases = [...selectedNode.data.cases];
+                            cases[idx] = { ...cases[idx], value: e.target.value };
+                            updateNodeData('cases', cases);
+                          }}
+                          className="bg-white/[0.03] border-white/[0.06] text-sky-400/90 text-[11px] font-mono rounded-lg h-9 flex-1" />
+                        <button type="button" title="Remove case" onClick={() => {
+                          const cases = selectedNode.data.cases.filter((_: any, i: number) => i !== idx);
+                          updateNodeData('cases', cases);
+                        }} className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/30 hover:text-red-400">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => {
+                      const cases = Array.isArray(selectedNode.data.cases) ? selectedNode.data.cases : [];
+                      updateNodeData('cases', [...cases, { value: `case_${cases.length + 1}` }]);
+                    }} className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1.5">
+                      <Plus className="w-3 h-3" /> Add case
+                    </button>
+                  </div>
+                </PropSection>
+              </>)}
+
+              {/* -- Extract -- */}
+              {selectedNode.type === 'extract' && (<>
+                <PropSection label="Schema fields">
+                  <div className="space-y-2">
+                    {(Array.isArray(selectedNode.data.schema) ? selectedNode.data.schema : []).map((f: any, idx: number) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <Input value={f.name}
+                          onChange={(e) => {
+                            const schema = [...selectedNode.data.schema];
+                            schema[idx] = { ...schema[idx], name: e.target.value };
+                            updateNodeData('schema', schema);
+                          }}
+                          className="bg-white/[0.03] border-white/[0.06] text-teal-400/90 text-[11px] font-mono rounded-lg h-9 flex-1" placeholder="field name" />
+                        <Select value={f.type || 'string'}
+                          onValueChange={(v) => {
+                            const schema = [...selectedNode.data.schema];
+                            schema[idx] = { ...schema[idx], type: v };
+                            updateNodeData('schema', schema);
+                          }}>
+                          <SelectTrigger className="bg-white/[0.03] border-white/[0.06] text-white/70 text-[11px] rounded-lg h-9 w-24"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-[#1a1a2e] border-white/[0.08] text-white/80 rounded-xl">
+                            <SelectItem value="string">string</SelectItem>
+                            <SelectItem value="number">number</SelectItem>
+                            <SelectItem value="boolean">boolean</SelectItem>
+                            <SelectItem value="array">array</SelectItem>
+                            <SelectItem value="enum">enum</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <button type="button" title="Remove field" onClick={() => {
+                          const schema = selectedNode.data.schema.filter((_: any, i: number) => i !== idx);
+                          updateNodeData('schema', schema);
+                        }} className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/30 hover:text-red-400">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => {
+                      const schema = Array.isArray(selectedNode.data.schema) ? selectedNode.data.schema : [];
+                      updateNodeData('schema', [...schema, { name: `field_${schema.length + 1}`, type: 'string' }]);
+                    }} className="text-[11px] text-teal-400 hover:text-teal-300 flex items-center gap-1.5">
+                      <Plus className="w-3 h-3" /> Add field
+                    </button>
+                  </div>
+                </PropSection>
+                <PropSection label="Save to variable">
+                  <Input value={selectedNode.data.resultVariable} onChange={(e) => updateNodeData('resultVariable', e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] text-teal-400/80 text-[12px] font-mono rounded-xl h-10 focus:border-teal-500/30"
+                    placeholder="e.g. extracted" />
+                </PropSection>
+              </>)}
+
+              {/* -- Transfer Agent (Squad) -- */}
+              {selectedNode.type === 'transfer_agent' && (<>
+                <PropSection label="Destination Agent ID" hint="The MongoDB _id of the agent to hand off to">
+                  <Input value={selectedNode.data.agentId} onChange={(e) => updateNodeData('agentId', e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] text-fuchsia-400/90 text-[12px] font-mono rounded-xl h-10 focus:border-fuchsia-500/30"
+                    placeholder="65a..." />
+                </PropSection>
+                <PropSection label="Display Name (optional)">
+                  <Input value={selectedNode.data.agentName} onChange={(e) => updateNodeData('agentName', e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] text-white/70 text-[12px] rounded-xl h-10 focus:border-fuchsia-500/30"
+                    placeholder="e.g. Billing Specialist" />
+                </PropSection>
+                <PropSection label="Reason">
+                  <Input value={selectedNode.data.reason} onChange={(e) => updateNodeData('reason', e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] text-white/70 text-[12px] rounded-xl h-10 focus:border-fuchsia-500/30" />
                 </PropSection>
               </>)}
 
