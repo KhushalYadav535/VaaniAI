@@ -385,6 +385,25 @@ export const callFlowsApi = {
   delete: (id: string) => apiRequest(`/call-flows/${id}`, { method: 'DELETE' }),
 };
 
+// ─── Test Suites (AI Simulation Testing) ─────────────────────────────────────
+
+export const testSuitesApi = {
+  getAll: () => apiRequest('/test-suites'),
+  getById: (id: string) => apiRequest(`/test-suites/${id}`),
+  create: (data: {
+    name: string
+    description?: string
+    agentId: string
+    scenarios?: any[]
+  }) => apiRequest('/test-suites', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: any) =>
+    apiRequest(`/test-suites/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => apiRequest(`/test-suites/${id}`, { method: 'DELETE' }),
+  // Kick off a run — returns { runId }. Poll getRun() for progress.
+  run: (id: string) => apiRequest(`/test-suites/${id}/run`, { method: 'POST' }),
+  getRun: (id: string, runId: string) => apiRequest(`/test-suites/${id}/runs/${runId}`),
+};
+
 // Update webhooks api to support logs
 export const webhooksLogsApi = {
   getAllLogs: () => apiRequest('/webhooks/logs'),

@@ -112,6 +112,7 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
   const temperature = watch('temperature')
   const llmProvider = watch('llmProvider')
   const language = watch('language')
+  const voiceProvider = watch('voiceProvider') || 'edge-tts'
 
   // ── Visual Tool Builder State ──────────────────────────────────────
   type ToolParam = { name: string; type: string; description: string; required: boolean }
@@ -187,7 +188,7 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
 
   const llmModels: Record<string, string[]> = {
     openai: ['gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
-    groq: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768'],
+    groq: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b'],
     gemini: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'],
   }
 
@@ -402,6 +403,7 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
                       <SelectTrigger className={selectTriggerCls}><SelectValue /></SelectTrigger>
                       <SelectContent className={selectContentCls}>
                         <SelectItem value="edge-tts">Edge TTS (Fast)</SelectItem>
+                        <SelectItem value="cartesia">Cartesia (Ultra-Fast)</SelectItem>
                         <SelectItem value="eleven-labs">ElevenLabs (HD)</SelectItem>
                         <SelectItem value="azure">Azure Cognitive</SelectItem>
                       </SelectContent>
@@ -412,10 +414,23 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
                     <Select value={watch('voiceId') || 'en-US-JennyNeural'} onValueChange={(v) => setValue('voiceId', v)}>
                       <SelectTrigger className={selectTriggerCls}><SelectValue /></SelectTrigger>
                       <SelectContent className={selectContentCls}>
-                        {language.startsWith('hi') ? (
+                        {voiceProvider === 'cartesia' ? (
+                          <>
+                            <SelectItem value="0f14d8cb-f039-41fe-a813-a9b4bee7eed8">Nisha (F - Indian/Hindi)</SelectItem>
+                            <SelectItem value="a81fccdc-5595-4dfc-ae76-4de6a515b8a2">Meera (F - Indian/Hindi)</SelectItem>
+                            <SelectItem value="4877b818-c7fe-4c89-b1cf-eadf8e23da72">Rohan (M - Indian/Hindi)</SelectItem>
+                            <SelectItem value="910fb75e-1d20-4840-ac63-ac6b26a71bdc">Dev (M - Indian/Hindi)</SelectItem>
+                          </>
+                        ) : language === 'hi' ? (
                           <>
                             <SelectItem value="hi-IN-SwaraNeural">Swara (F)</SelectItem>
                             <SelectItem value="hi-IN-MadhurNeural">Madhur (M)</SelectItem>
+                          </>
+                        ) : language === 'hi-Latn' ? (
+                          <>
+                            <SelectItem value="en-IN-NeerjaNeural">Neerja (F - Best for Hinglish)</SelectItem>
+                            <SelectItem value="en-IN-PrabhatNeural">Prabhat (M - Best for Hinglish)</SelectItem>
+                            <SelectItem value="hi-IN-SwaraNeural">Swara (F - Native Hindi)</SelectItem>
                           </>
                         ) : (
                           <>

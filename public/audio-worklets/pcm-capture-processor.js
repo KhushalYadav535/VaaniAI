@@ -4,7 +4,16 @@ class PcmCaptureProcessor extends AudioWorkletProcessor {
     this.targetSampleRate = 16000;
     this.chunkMs = 100;
     this.vadThreshold = 0.012;
-    this.interruptionThreshold = 0.04;
+    // interruptionThreshold: the RMS level required to declare barge-in WHILE
+    // the agent is speaking. Must be high enough to survive acoustic echo
+    // (the agent's own filler words / TTS audio coming back through the mic).
+    // 0.04 was too low — short filler words like "Hmm..." produced ~0.05 RMS
+    // through typical laptop speakers, causing immediate false interrupts.
+    // 0.08 requires a clearly louder voice than the speaker output.
+    this.interruptionThreshold = 0.08;
+    // minSpeechChunks when the agent is speaking: require MORE consecutive
+    // voiced chunks so a single echo spike can't win. 3 chunks = 300ms sustained.
+    this.minSpeechChunksAgent = 3;
     this.silenceMs = 700;
     this.enabled = true;
     this.agentSpeaking = false;
@@ -14,6 +23,12 @@ class PcmCaptureProcessor extends AudioWorkletProcessor {
     this.sumSquares = 0;
     this.speechActive = false;
     this.silentSamples = 0;
+    // Consecutive above-threshold chunks required before we declare
+    // speech_start. Guards against single-chunk noise spikes (coughs,
+    // clicks, door slams) firing a false barge-in — the "Background-Noise
+    // Confused" failure mode. 2 chunks @100ms = 200ms of sustained energy.
+    this.minSpeechChunks = 2;
+    this.voicedChunks = 0;
     this.samplesPerChunk = Math.max(160, Math.round(this.targetSampleRate * this.chunkMs / 1000));
     this.silenceSamples = Math.max(this.samplesPerChunk, Math.round(this.targetSampleRate * this.silenceMs / 1000));
 
@@ -26,8 +41,14 @@ class PcmCaptureProcessor extends AudioWorkletProcessor {
       if (msg.vadThreshold) this.vadThreshold = Number(msg.vadThreshold);
       if (msg.interruptionThreshold) this.interruptionThreshold = Number(msg.interruptionThreshold);
       if (msg.silenceMs) this.silenceMs = Number(msg.silenceMs);
+      if (msg.minSpeechChunks) this.minSpeechChunks = Number(msg.minSpeechChunks);
       if (typeof msg.enabled === 'boolean') this.enabled = msg.enabled;
-      if (typeof msg.agentSpeaking === 'boolean') this.agentSpeaking = msg.agentSpeaking;
+      if (typeof msg.agentSpeaking === 'boolean') {
+        this.agentSpeaking = msg.agentSpeaking;
+        // Reset the voiced-run counter on state change so the higher
+        // interruption threshold is applied cleanly from the next chunk.
+        this.voicedChunks = 0;
+      }
 
       this.samplesPerChunk = Math.max(160, Math.round(this.targetSampleRate * this.chunkMs / 1000));
       this.silenceSamples = Math.max(this.samplesPerChunk, Math.round(this.targetSampleRate * this.silenceMs / 1000));
@@ -44,20 +65,32 @@ class PcmCaptureProcessor extends AudioWorkletProcessor {
     const rms = Math.sqrt(this.sumSquares / this.chunk.length);
     const threshold = this.agentSpeaking ? this.interruptionThreshold : this.vadThreshold;
     const hasSpeech = rms >= threshold;
+    // When the agent is speaking, require more consecutive voiced chunks
+    // (longer sustained energy) before declaring speech_start, so that
+    // brief echoes of the agent's own TTS audio don't trigger a barge-in.
+    const requiredChunks = this.agentSpeaking ? this.minSpeechChunksAgent : this.minSpeechChunks;
 
     if (hasSpeech) {
       this.silentSamples = 0;
-      if (!this.speechActive) {
+      this.voicedChunks += 1;
+      // Only declare speech_start after N consecutive voiced chunks so a
+      // brief noise transient can't trigger a false barge-in.
+      if (!this.speechActive && this.voicedChunks >= requiredChunks) {
         this.speechActive = true;
         this.port.postMessage({ type: 'speech_start', rms, seq: this.seq });
       }
     } else if (this.speechActive) {
+      this.voicedChunks = 0;
       this.silentSamples += this.chunk.length;
       if (this.silentSamples >= this.silenceSamples) {
         this.speechActive = false;
         this.silentSamples = 0;
         this.port.postMessage({ type: 'speech_end', rms, seq: this.seq });
       }
+    } else {
+      // Not in speech and this chunk was quiet — decay the voiced counter so
+      // only SUSTAINED energy (not scattered spikes) accumulates.
+      this.voicedChunks = 0;
     }
 
     const pcm = new Int16Array(this.chunk.length);

@@ -75,6 +75,9 @@ export default function TestAgentPage() {
   const simulationQueueRef = useRef<string[]>([])
   const isAgentSpeakingRef = useRef(false)
   const lastAudioChunkSentAtRef = useRef<number | null>(null)
+  // Grace period to prevent mic acoustic echo from interrupting the greeting.
+  // Set to Date.now() + N ms when a first-message starts; barge-in is blocked until expired.
+  const greetingGracePeriodEndRef = useRef<number>(0)
 
   const wsRef = useRef<ReconnectingVoiceSession | null>(null)
   const micStreamerRef = useRef<RealtimeMicStreamer | null>(null)
@@ -298,6 +301,14 @@ export default function TestAgentPage() {
           })
           setStatus('speaking')
           isAgentSpeakingRef.current = true;
+          // Every time the agent starts speaking, set a short grace window.
+          // This prevents the agent's own TTS audio (especially short filler
+          // words like "Hmm...") from being picked up by the mic and triggering
+          // a false barge-in interrupt (acoustic echo).
+          // First message gets 5s (full greeting), subsequent turns get 1.5s
+          // (enough to clear filler words before real user speech is detected).
+          const graceDuration = msg.isFirstMessage ? 5000 : 1500;
+          greetingGracePeriodEndRef.current = Date.now() + graceDuration;
         }
         break
 
@@ -457,7 +468,10 @@ export default function TestAgentPage() {
         chunkMs: MIC_CHUNK_MS,
         silenceMs: 700,
         vadThreshold: 0.012,
-        interruptionThreshold: 0.04,
+        // 0.08: high enough to survive acoustic echo of the agent's own TTS
+        // audio coming back through the mic (filler words, greetings).
+        // A real human voice at conversational level is typically 0.1-0.3 RMS.
+        interruptionThreshold: 0.08,
         onStarted: (cfg) => {
           wsRef.current?.send(JSON.stringify({
             type: 'mic_config',
@@ -476,6 +490,34 @@ export default function TestAgentPage() {
           wsRef.current.send(frame.data)
         },
         onSpeechStart: () => {
+          // INSTANT LOCAL BARGE-IN: if the agent is currently speaking and
+          // the user starts talking, stop our playback IMMEDIATELY on the
+          // client instead of waiting for the backend to round-trip an
+          // 'interrupt' message (200-600ms of the agent talking over the
+          // user — the #1 thing that makes an agent feel robotic).
+          // The mic worklet already uses a higher interruptionThreshold
+          // (0.04) while the agent speaks, so this is a confident signal,
+          // not background noise.
+          if (isAgentSpeakingRef.current) {
+            const now = Date.now()
+            // GREETING GRACE PERIOD: block barge-in for the first few seconds
+            // of a call. Without this, the mic picks up the greeting audio
+            // through the speakers (acoustic echo) and immediately fires an
+            // interrupt, cutting the greeting after just one word.
+            if (now < greetingGracePeriodEndRef.current) return;
+            // Debounce so a burst of speech_start frames doesn't thrash.
+            if (now - lastInterruptAtRef.current > 400) {
+              lastInterruptAtRef.current = now
+              interruptAgentPlayback()
+              setStatus('listening')
+              setStatusText('Listening...')
+              // Tell the backend to abort its in-flight generation so it
+              // stops sending audio and frees the LLM slot.
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: 'barge_in' }))
+              }
+            }
+          }
           if (wsRef.current?.readyState !== WebSocket.OPEN) return
           wsRef.current.send(JSON.stringify({ type: 'user_speech_start' }))
         },

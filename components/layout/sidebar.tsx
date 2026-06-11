@@ -22,7 +22,8 @@ import {
   Code,
   Users,
   LibraryBig,
-  FlaskConical
+  FlaskConical,
+  ClipboardCheck
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -48,6 +49,7 @@ const customerNavigation = [
   { name: 'Web Widget', href: '/web-widget', icon: Code },
   { name: 'Playground', href: '/playground', icon: FlaskConical },
   { name: 'Test Agent', href: '/test-agent', icon: Microscope },
+  { name: 'Test Suites', href: '/test-suites', icon: ClipboardCheck },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
