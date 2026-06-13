@@ -421,6 +421,38 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
                             <SelectItem value="4877b818-c7fe-4c89-b1cf-eadf8e23da72">Rohan (M - Indian/Hindi)</SelectItem>
                             <SelectItem value="910fb75e-1d20-4840-ac63-ac6b26a71bdc">Dev (M - Indian/Hindi)</SelectItem>
                           </>
+                        ) : voiceProvider === 'eleven-labs' ? (
+                          <>
+                            {/* ── Hindi / Indian Voices ── */}
+                            <SelectItem value="ohvvU75FpBEB8fdaLOMh">🇮🇳 Monika Sogam – Lively E-Com Support (F · Hindi)</SelectItem>
+                            <SelectItem value="1qEiC6qsybMkmnNdVMbK">🇮🇳 Monika Sogam – Hindi Modulated (F · Hindi)</SelectItem>
+                            <SelectItem value="UYoWPkHjaRgjWccloxC5">🇮🇳 Monika Sogam – Social Media (F · Indian English)</SelectItem>
+                            <SelectItem value="kFCe7jyOkkYKzOgpe2u0">🇮🇳 Simran – Friendly Assistant (F · Hindi)</SelectItem>
+                            <SelectItem value="dVTC43Yewy5fAIcmsISI">🇮🇳 Anvi – Warm Conversational (F · Hindi)</SelectItem>
+                            <SelectItem value="OBh891VZK0Q0IJm3Iq8T">🇮🇳 Parth – Soothing Calm (M · Hindi)</SelectItem>
+                            <SelectItem value="zgqefOY5FPQ3bB7OZTVR">🇮🇳 Niraj – Hindi Narrator (M · Hindi)</SelectItem>
+                            {/* ── English Premium Voices ── */}
+                            <SelectItem value="EXAVITQu4vr4xnSDxMaL">Sarah – Mature, Confident (F · American)</SelectItem>
+                            <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel – Standard (F · American)</SelectItem>
+                            <SelectItem value="cgSgspJ2msm6clMCkdW9">Jessica – Playful, Warm (F · American)</SelectItem>
+                            <SelectItem value="XrExE9yKIg1WjnnlVkGX">Matilda – Professional (F · American)</SelectItem>
+                            <SelectItem value="Xb7hH8MSUJpSbSDYk0k2">Alice – Clear, Educator (F · British)</SelectItem>
+                            <SelectItem value="pFZP5JQG7iQjIQuC4Bku">Lily – Velvety Actress (F · British)</SelectItem>
+                            <SelectItem value="hpp4J3VqNfWAUOO0d1Us">Bella – Professional, Bright (F · American)</SelectItem>
+                            <SelectItem value="FGY2WhTYpPnrIDTdsKH5">Laura – Quirky Attitude (F · American)</SelectItem>
+                            <SelectItem value="SAz9YHcvj6GT2YYXdXww">River – Calm, Neutral (N · American)</SelectItem>
+                            <SelectItem value="cjVigY5qzO86Huf0OWal">Eric – Smooth, Trustworthy (M · American)</SelectItem>
+                            <SelectItem value="iP95p4xoKVk53GoZ742B">Chris – Down-to-Earth (M · American)</SelectItem>
+                            <SelectItem value="nPczCjzI2devNBz1zQrb">Brian – Deep, Resonant (M · American)</SelectItem>
+                            <SelectItem value="CwhRBWXzGAHq8TQ4Fs17">Roger – Laid-Back, Casual (M · American)</SelectItem>
+                            <SelectItem value="bIHbv24MWmeRgasZH58o">Will – Relaxed Optimist (M · American)</SelectItem>
+                            <SelectItem value="TX3LPaxmHKxFdv7VOQHJ">Liam – Energetic Creator (M · American)</SelectItem>
+                            <SelectItem value="pqHfZKP75CvOlQylNhV4">Bill – Wise, Mature (M · American)</SelectItem>
+                            <SelectItem value="pNInz6obpgDQGcFmaJgB">Adam – Dominant, Firm (M · American)</SelectItem>
+                            <SelectItem value="onwK4e9ZLuTAKqWW03F9">Daniel – Broadcaster (M · British)</SelectItem>
+                            <SelectItem value="JBFqnCBsd6RMkjVDRZzb">George – Storyteller (M · British)</SelectItem>
+                            <SelectItem value="IKne3meq5aSn9XLyUdCD">Charlie – Deep, Energetic (M · Australian)</SelectItem>
+                          </>
                         ) : language === 'hi' ? (
                           <>
                             <SelectItem value="hi-IN-SwaraNeural">Swara (F)</SelectItem>

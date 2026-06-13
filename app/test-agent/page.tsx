@@ -307,7 +307,7 @@ export default function TestAgentPage() {
           // a false barge-in interrupt (acoustic echo).
           // First message gets 5s (full greeting), subsequent turns get 1.5s
           // (enough to clear filler words before real user speech is detected).
-          const graceDuration = msg.isFirstMessage ? 5000 : 1500;
+          const graceDuration = msg.isFirstMessage ? 2500 : 1500;
           greetingGracePeriodEndRef.current = Date.now() + graceDuration;
         }
         break
