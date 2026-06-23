@@ -37,6 +37,9 @@ export default function PlaygroundPage() {
   const [abResult, setAbResult] = useState<any>(null)
   const [abLoading, setAbLoading] = useState(false)
 
+  const countWords = (s: string) => s.trim() ? s.trim().split(/\s+/).length : 0
+  const countChars = (s: string) => s.length
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -294,23 +297,54 @@ export default function PlaygroundPage() {
               </div>
 
               {abResult && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                    { label: 'Prompt A', result: abResult.resultA },
-                    { label: 'Prompt B', result: abResult.resultB },
-                  ].map((side) => (
-                    <div key={side.label} className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">{side.label}</h3>
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> {side.result.latencyMs}ms
-                        </span>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      { label: 'Prompt A', result: abResult.resultA },
+                      { label: 'Prompt B', result: abResult.resultB },
+                    ].map((side) => (
+                      <div key={side.label} className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">{side.label}</h3>
+                          <span className="text-xs text-slate-400 flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> {side.result.latencyMs}ms
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 text-sm font-light text-slate-700 dark:text-slate-300 max-h-64 overflow-y-auto">
+                          {side.result.response}
+                        </div>
                       </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 text-sm font-light text-slate-700 dark:text-slate-300 max-h-64 overflow-y-auto">
-                        {side.result.response}
-                      </div>
+                    ))}
+                  </div>
+                  {/* Metrics comparison table */}
+                  <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-200/50 dark:border-slate-800/50 p-5">
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Side-by-Side Metrics</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 dark:border-slate-700/50">
+                            <th className="text-left py-2 text-slate-400 font-medium">Metric</th>
+                            <th className="text-right py-2 text-slate-700 dark:text-slate-300 font-medium">Prompt A</th>
+                            <th className="text-right py-2 text-slate-700 dark:text-slate-300 font-medium">Prompt B</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/30">
+                          {[
+                            { label: 'Latency', a: `${abResult.resultA.latencyMs}ms`, b: `${abResult.resultB.latencyMs}ms`, better: abResult.resultA.latencyMs < abResult.resultB.latencyMs ? 'A' : abResult.resultB.latencyMs < abResult.resultA.latencyMs ? 'B' : null },
+                            { label: 'Response Length (chars)', a: countChars(abResult.resultA.response).toLocaleString(), b: countChars(abResult.resultB.response).toLocaleString(), better: null },
+                            { label: 'Word Count', a: countWords(abResult.resultA.response).toLocaleString(), b: countWords(abResult.resultB.response).toLocaleString(), better: null },
+                            { label: 'Words/sec', a: (countWords(abResult.resultA.response) / (abResult.resultA.latencyMs / 1000)).toFixed(1), b: (countWords(abResult.resultB.response) / (abResult.resultB.latencyMs / 1000)).toFixed(1), better: null },
+                          ].map((row) => (
+                            <tr key={row.label}>
+                              <td className="py-1.5 text-slate-500">{row.label}</td>
+                              <td className={`py-1.5 text-right font-mono ${row.better === 'A' ? 'text-green-600 dark:text-green-400 font-medium' : ''}`}>{row.a}</td>
+                              <td className={`py-1.5 text-right font-mono ${row.better === 'B' ? 'text-green-600 dark:text-green-400 font-medium' : ''}`}>{row.b}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  ))}
+                  </div>
                 </div>
               )}
             </div>

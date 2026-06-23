@@ -23,7 +23,8 @@ import {
   Users,
   LibraryBig,
   FlaskConical,
-  ClipboardCheck
+  ClipboardCheck,
+  Plug,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -45,6 +46,7 @@ const customerNavigation = [
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Active Calls', href: '/active-calls', icon: Activity },
   { name: 'Voice Settings', href: '/voice-settings', icon: Mic },
+  { name: 'Integrations', href: '/integrations', icon: Plug },
   { name: 'Webhooks', href: '/webhooks', icon: Webhook },
   { name: 'Web Widget', href: '/web-widget', icon: Code },
   { name: 'Playground', href: '/playground', icon: FlaskConical },

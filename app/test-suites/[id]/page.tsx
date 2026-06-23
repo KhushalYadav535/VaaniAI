@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button'
 import { testSuitesApi } from '@/lib/api'
 import {
   ArrowLeft, Play, Loader2, CheckCircle2, XCircle, Bot, User,
-  ChevronDown, ChevronRight, Clock, Gauge,
+  ChevronDown, ChevronRight, Clock, Gauge, BarChart3, TrendingUp,
 } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function TestSuiteDetailPage() {
   const params = useParams()
@@ -262,6 +263,36 @@ export default function TestSuiteDetailPage() {
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Run history / regression trend */}
+      {suite.runs?.length > 1 && (
+        <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200/50 dark:border-slate-800/50 p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-white" />
+            </div>
+            <h2 className="text-lg font-thin text-slate-900 dark:text-white">Regression Trend</h2>
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={[...suite.runs].reverse().slice(0, 20).reverse().map((r: any, i: number) => ({
+              run: `#${i + 1}`,
+              passRate: r.passRate || 0,
+              avgScore: r.results?.length > 0 ? Math.round(r.results.reduce((a: number, b: any) => a + (b.score || 0), 0) / r.results.length) : 0,
+            }))}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.2} />
+              <XAxis dataKey="run" stroke="#94a3b8" tick={{ fontSize: 11, fontWeight: 300 }} />
+              <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fontWeight: 300 }} domain={[0, 100]} />
+              <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '12px', fontSize: 12 }} />
+              <Line type="monotone" dataKey="passRate" stroke="#22c55e" strokeWidth={2} name="Pass Rate %" dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="avgScore" stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="3 2" name="Avg Score" dot={{ r: 2 }} />
+            </LineChart>
+          </ResponsiveContainer>
+          <div className="flex gap-4 mt-3 text-xs text-slate-400">
+            <span className="flex items-center gap-1"><div className="w-3 h-0.5 rounded bg-green-500" /> Pass Rate</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-0.5 rounded bg-violet-500" /> Avg Score</span>
           </div>
         </div>
       )}

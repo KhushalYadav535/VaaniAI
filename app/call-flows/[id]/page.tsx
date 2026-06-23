@@ -19,6 +19,9 @@ import {
   Position,
   NodeProps,
   useReactFlow,
+  applyNodeChanges,
+  applyEdgeChanges,
+  MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -32,6 +35,7 @@ import {
   Save, ArrowLeft, Play, MessageSquare, Mic, HelpCircle, Phone, ArrowRightCircle,
   Webhook, Clock, Variable, Trash2, X, ChevronRight, Zap, Network,
   Search, GripVertical, Copy, Keyboard, Hash, GitBranch, Brain, FileSearch, UserPlus, Plus,
+  Undo2, Redo2, LayoutGrid, CheckCircle2, AlignStartVertical, AlignEndVertical, StickyNote,
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -57,6 +61,7 @@ const NODE_CATALOG = {
     { type: 'transfer_agent', label: 'Squad Handoff',   icon: UserPlus, color: '#d946ef', desc: 'Transfer to another AI agent' },
     { type: 'webhook',        label: 'Webhook / API',   icon: Webhook,  color: '#10b981', desc: 'Call external API' },
     { type: 'end',            label: 'End Call',        icon: ArrowRightCircle, color: '#ef4444', desc: 'Hang up the call' },
+    { type: 'comment',        label: 'Note / Comment',  icon: StickyNote, color: '#facc15', desc: 'Add inline documentation' },
   ],
 };
 
@@ -341,6 +346,26 @@ const EndNode = ({ data, selected }: NodeProps) => {
   );
 };
 
+const CommentNode = ({ data, selected }: NodeProps) => {
+  const d = data as any;
+  return (
+    <div className={`group relative min-w-[200px] max-w-[300px] rounded-2xl transition-all duration-300 ${selected ? 'scale-[1.02]' : ''}`}
+      style={{
+        background: '#1a1a2e80',
+        border: `1.5px solid ${selected ? '#facc15' : 'rgba(250,204,21,0.2)'}`,
+        boxShadow: selected ? '0 0 30px rgba(250,204,21,0.15), 0 8px 32px rgba(0,0,0,0.4)' : '0 4px 20px rgba(0,0,0,0.3)',
+      }}>
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-yellow-500/10">
+        <StickyNote className="w-3.5 h-3.5 text-yellow-400" />
+        <span className="text-[11px] font-bold text-yellow-400/80 uppercase tracking-wide">Note</span>
+      </div>
+      <div className="px-4 py-3">
+        <div className="text-[11px] text-yellow-300/60 italic leading-relaxed whitespace-pre-wrap">{d.text || 'Add a note...'}</div>
+      </div>
+    </div>
+  );
+};
+
 const nodeTypes = {
   trigger: TriggerNode,
   speak: SpeakNode,
@@ -357,6 +382,7 @@ const nodeTypes = {
   transfer_agent: TransferAgentNode,
   webhook: WebhookNode,
   end: EndNode,
+  comment: CommentNode,
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -405,12 +431,82 @@ const getDefaultDataForType = (type: string) => {
     case 'transfer_agent': return { agentId: '', agentName: '', reason: 'Squad routing' };
     case 'webhook':        return { method: 'POST', url: 'https://api.example.com/webhook', body: '{}', resultVariable: 'api_result', timeoutMs: 8000, maxRetries: 0 };
     case 'end':            return { message: 'Goodbye!' };
+    case 'comment':        return { text: 'TODO: document why this path exists' };
     default:               return {};
   }
 };
 
 let idCounter = 0;
 const getId = () => `node_${Date.now()}_${idCounter++}`;
+
+/* ═══════════════════════════════════════════════════════════════════
+   UNDO / REDO HISTORY
+   ═══════════════════════════════════════════════════════════════════ */
+
+type HistoryEntry = { nodes: Node[]; edges: Edge[] };
+const MAX_HISTORY = 50;
+
+function useUndoRedo(
+  nodes: Node[], setNodes: any,
+  edges: Edge[], setEdges: any
+) {
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const skipRef = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pushHistory = useCallback((n: Node[], e: Edge[]) => {
+    if (skipRef.current) { skipRef.current = false; return; }
+    setHistory(prev => {
+      const trimmed = prev.slice(0, historyIndex + 1);
+      const next = [...trimmed, { nodes: JSON.parse(JSON.stringify(n)), edges: JSON.parse(JSON.stringify(e)) }];
+      if (next.length > MAX_HISTORY) next.shift();
+      return next;
+    });
+    setHistoryIndex(prev => Math.min(prev + 1, MAX_HISTORY - 1));
+  }, [historyIndex]);
+
+  const undo = useCallback(() => {
+    if (historyIndex <= 0) return;
+    const newIdx = historyIndex - 1;
+    const entry = history[newIdx];
+    if (entry) {
+      skipRef.current = true;
+      setNodes(JSON.parse(JSON.stringify(entry.nodes)));
+      setEdges(JSON.parse(JSON.stringify(entry.edges)));
+      setHistoryIndex(newIdx);
+    }
+  }, [historyIndex, history, setNodes, setEdges]);
+
+  const redo = useCallback(() => {
+    if (historyIndex >= history.length - 1) return;
+    const newIdx = historyIndex + 1;
+    const entry = history[newIdx];
+    if (entry) {
+      skipRef.current = true;
+      setNodes(JSON.parse(JSON.stringify(entry.nodes)));
+      setEdges(JSON.parse(JSON.stringify(entry.edges)));
+      setHistoryIndex(newIdx);
+    }
+  }, [historyIndex, history, setNodes, setEdges]);
+
+  // Debounced auto-push on any state change (positions, data, etc.)
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (nodes.length > 0 || edges.length > 0) {
+        const entry = history[historyIndex];
+        const nodesSame = entry && JSON.stringify(entry.nodes) === JSON.stringify(nodes);
+        const edgesSame = entry && JSON.stringify(entry.edges) === JSON.stringify(edges);
+        if (!nodesSame || !edgesSame) pushHistory(nodes, edges);
+      }
+    }, 500);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, edges]);
+
+  return { undo, redo, canUndo: historyIndex > 0, canRedo: historyIndex < history.length - 1 };
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    FLOW EDITOR — Main Component
@@ -421,7 +517,7 @@ function FlowEditor() {
   const params = useParams();
   const flowId = params.id as string;
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, getNodes, getEdges, setNodes: rfSetNodes, setEdges: rfSetEdges } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -429,6 +525,159 @@ function FlowEditor() {
   const [isSaving, setIsSaving] = useState(false);
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [validationMsg, setValidationMsg] = useState<string | null>(null);
+  const [showNotes, setShowNotes] = useState(false);
+  const [simulating, setSimulating] = useState(false);
+  const [simStep, setSimStep] = useState(0);
+  const [selectedEdge, setSelectedEdge] = useState<any>(null);
+
+  const { undo, redo, canUndo, canRedo } = useUndoRedo(nodes, setNodes, edges, setEdges);
+
+  // Flow templates
+  const flowTemplates = [
+    { name: 'IVR Menu', desc: 'DTMF-based menu with routing', build: () => ({
+      nodes: [
+        { id: 'trigger', type: 'trigger', position: { x: 250, y: 0 }, data: {} },
+        { id: 'speak', type: 'speak', position: { x: 250, y: 120 }, data: { text: 'Press 1 for sales, 2 for support.' } },
+        { id: 'dtmf', type: 'dtmf', position: { x: 250, y: 240 }, data: { prompt: 'Press 1 for sales, 2 for support.', variable: 'menu_choice', routes: { '1': 'sales', '2': 'support' } } },
+        { id: 'end', type: 'end', position: { x: 250, y: 380 }, data: { message: 'Goodbye!' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'trigger', target: 'speak', animated: true },
+        { id: 'e2', source: 'speak', target: 'dtmf', animated: true },
+        { id: 'e3', source: 'dtmf', target: 'end', animated: true },
+      ],
+    })},
+    { name: 'Survey Call', desc: 'Ask questions and capture responses', build: () => ({
+      nodes: [
+        { id: 'trigger', type: 'trigger', position: { x: 250, y: 0 }, data: {} },
+        { id: 'speak', type: 'speak', position: { x: 250, y: 120 }, data: { text: 'Hello! We value your feedback.' } },
+        { id: 'gather', type: 'gather', position: { x: 250, y: 240 }, data: { prompt: 'On a scale of 1-10, how satisfied are you?', variable: 'satisfaction', expectedType: 'text' } },
+        { id: 'gather2', type: 'gather', position: { x: 250, y: 360 }, data: { prompt: 'Any suggestions for improvement?', variable: 'feedback', expectedType: 'text' } },
+        { id: 'end', type: 'end', position: { x: 250, y: 480 }, data: { message: 'Thank you for your time!' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'trigger', target: 'speak', animated: true },
+        { id: 'e2', source: 'speak', target: 'gather', animated: true },
+        { id: 'e3', source: 'gather', target: 'gather2', animated: true },
+        { id: 'e4', source: 'gather2', target: 'end', animated: true },
+      ],
+    })},
+  ];
+
+  // Keyboard shortcuts
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    const isMac = navigator.platform.includes('Mac');
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (selectedNode) {
+        setNodes((nds) => nds.filter(n => n.id !== selectedNode.id));
+        setEdges((eds) => eds.filter(e => e.source !== selectedNode.id && e.target !== selectedNode.id));
+        setSelectedNode(null);
+      }
+    }
+    if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+    if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+    if (mod && e.key === 'c' && selectedNode) {
+      e.preventDefault();
+      navigator.clipboard.writeText(JSON.stringify(selectedNode));
+    }
+    if (mod && e.key === 'v') {
+      e.preventDefault();
+      navigator.clipboard.readText().then(text => {
+        try {
+          const data = JSON.parse(text);
+          if (data.type && data.data) {
+            setNodes((nds) => nds.concat({
+              id: getId(), type: data.type,
+              position: { x: data.position.x + 50, y: data.position.y + 50 },
+              data: JSON.parse(JSON.stringify(data.data)),
+            }));
+          }
+        } catch { /* ignore non-node clipboard content */ }
+      });
+    }
+    if (mod && e.key === 'd' && selectedNode) {
+      e.preventDefault();
+      setNodes((nds) => nds.concat({
+        id: getId(), type: selectedNode.type,
+        position: { x: selectedNode.position.x + 40, y: selectedNode.position.y + 60 },
+        data: JSON.parse(JSON.stringify(selectedNode.data)),
+      }));
+    }
+    if (e.key === 'Escape') setSelectedNode(null);
+  }, [selectedNode, setNodes, setEdges, undo, redo]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
+  // Valid connections
+  const isValidConnection = useCallback((connection: Connection) => {
+    const sourceNode = getNodes().find(n => n.id === connection.source);
+    const targetNode = getNodes().find(n => n.id === connection.target);
+    if (!sourceNode || !targetNode) return false;
+    if (targetNode.type === 'trigger') return false;
+    if (sourceNode.id === targetNode.id) return false;
+    return true;
+  }, [getNodes]);
+
+  // Validate flow
+  const validateFlow = useCallback(() => {
+    const issues: string[] = [];
+    const currentNodes = getNodes();
+    const currentEdges = getEdges();
+
+    if (currentNodes.length === 0) {
+      issues.push('Flow is empty — add at least one node.');
+    } else {
+      const hasTrigger = currentNodes.some(n => n.type === 'trigger');
+      if (!hasTrigger) issues.push('No Start (Trigger) node found. Add one to define entry point.');
+    }
+
+    // Check for disconnected nodes (except trigger)
+    const connectedNodeIds = new Set<string>();
+    currentEdges.forEach(e => { connectedNodeIds.add(e.source); connectedNodeIds.add(e.target); });
+    const disconnected = currentNodes.filter(n => !connectedNodeIds.has(n.id) && n.type !== 'trigger');
+    if (disconnected.length > 0) {
+      issues.push(`${disconnected.length} node(s) are disconnected (no incoming/outgoing connections).`);
+    }
+
+    // Check for nodes with missing required fields
+    currentNodes.forEach(n => {
+      if (n.type === 'webhook' && !(n.data as any)?.url) {
+        issues.push(`Webhook node "${n.id?.slice(0, 12)}" has no URL configured.`);
+      }
+      if (n.type === 'transfer' && !(n.data as any)?.transferTo) {
+        issues.push(`Transfer node "${n.id?.slice(0, 12)}" has no destination number.`);
+      }
+    });
+
+    if (issues.length === 0) {
+      setValidationMsg('Flow looks good! ✓');
+      toast.success('Flow validation passed!');
+    } else {
+      setValidationMsg(issues.join('\n'));
+      toast.error(`${issues.length} issue(s) found`);
+    }
+    setTimeout(() => setValidationMsg(null), 5000);
+  }, [getNodes, getEdges]);
+
+  // Auto-layout using dagre-like simple grid
+  const autoLayout = useCallback(() => {
+    const currentNodes = getNodes();
+    if (currentNodes.length === 0) return;
+    const sorted = [...currentNodes];
+    // Simple layered layout: position by index
+    sorted.forEach((n, i) => {
+      n.position = { x: 50 + (i % 4) * 250, y: 50 + Math.floor(i / 4) * 180 };
+    });
+    rfSetNodes([...sorted]);
+    setNodes([...sorted]);
+  }, [getNodes, rfSetNodes, setNodes]);
 
   useEffect(() => { fetchFlow(); }, [flowId]);
 
@@ -533,12 +782,111 @@ function FlowEditor() {
             placeholder="Untitled Flow"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          {/* Undo/Redo */}
+          <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)"
+            className="p-2 rounded-lg hover:bg-white/[0.05] text-white/30 hover:text-white/70 transition-all disabled:opacity-20 disabled:cursor-not-allowed">
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)"
+            className="p-2 rounded-lg hover:bg-white/[0.05] text-white/30 hover:text-white/70 transition-all disabled:opacity-20 disabled:cursor-not-allowed">
+            <Redo2 className="w-4 h-4" />
+          </button>
+
+          {/* Divider */}
+          <div className="h-5 w-px bg-white/[0.06] mx-1" />
+
+          {/* Snap-to-grid toggle */}
+          <button onClick={() => setSnapToGrid(s => !s)} title="Toggle snap to grid"
+            className={`p-2 rounded-lg transition-all ${snapToGrid ? 'text-violet-400 bg-violet-500/10' : 'text-white/30 hover:text-white/70 hover:bg-white/[0.05]'}`}>
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+
+          {/* Align / Auto-layout */}
+          <button onClick={autoLayout} title="Auto-layout nodes"
+            className="p-2 rounded-lg hover:bg-white/[0.05] text-white/30 hover:text-white/70 transition-all">
+            <AlignStartVertical className="w-4 h-4" />
+          </button>
+
+          {/* Templates */}
+          <div className="relative group/template">
+            <button title="Load template"
+              className="p-2 rounded-lg hover:bg-white/[0.05] text-white/30 hover:text-white/70 transition-all">
+              <Copy className="w-4 h-4" />
+            </button>
+            <div className="absolute top-full right-0 mt-1 w-48 opacity-0 invisible group-hover/template:opacity-100 group-hover/template:visible transition-all duration-200 z-50">
+              <div className="bg-[#1a1a2e] border border-white/[0.08] rounded-xl shadow-2xl overflow-hidden">
+                <div className="px-3 py-2 text-[10px] font-bold text-white/30 uppercase tracking-wider border-b border-white/[0.04]">Templates</div>
+                {flowTemplates.map(t => (
+                  <button key={t.name} onClick={() => {
+                    const { nodes: tn, edges: te } = t.build();
+                    setNodes(tn as any); setEdges(te as any);
+                  }}
+                    className="w-full text-left px-3 py-2.5 text-[12px] text-white/60 hover:bg-white/[0.04] hover:text-white/80 transition-colors">
+                    <div className="font-medium">{t.name}</div>
+                    <div className="text-[10px] text-white/30">{t.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Export */}
+          <button onClick={() => {
+            const data = JSON.stringify({ nodes: getNodes(), edges: getEdges() }, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `${flowData?.name || 'flow'}.json`; a.click();
+            URL.revokeObjectURL(url);
+            toast.success('Flow exported!');
+          }} title="Export flow as JSON"
+            className="p-2 rounded-lg hover:bg-white/[0.05] text-white/30 hover:text-white/70 transition-all">
+            <Save className="w-4 h-4" />
+          </button>
+
+          {/* Import */}
+          <button onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file'; input.accept = '.json';
+            input.onchange = (e: any) => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                try {
+                  const data = JSON.parse(ev.target?.result as string);
+                  if (data.nodes) setNodes(data.nodes);
+                  if (data.edges) setEdges(data.edges || []);
+                  toast.success('Flow imported!');
+                } catch { toast.error('Invalid flow file'); }
+              };
+              reader.readAsText(file);
+            };
+            input.click();
+          }} title="Import flow from JSON"
+            className="p-2 rounded-lg hover:bg-white/[0.05] text-white/30 hover:text-white/70 transition-all">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+
+          {/* Validate */}
+          <button onClick={validateFlow} title="Validate flow"
+            className="p-2 rounded-lg hover:bg-white/[0.05] text-white/30 hover:text-emerald-400 transition-all">
+            <CheckCircle2 className="w-4 h-4" />
+          </button>
+
+          {/* Simulation toggle */}
+          <button onClick={() => setSimulating(s => !s)} title="Simulation mode"
+            className={`p-2 rounded-lg transition-all ${simulating ? 'text-amber-400 bg-amber-500/10' : 'text-white/30 hover:text-white/70 hover:bg-white/[0.05]'}`}>
+            <Play className="w-4 h-4" />
+          </button>
+
+          <div className="h-5 w-px bg-white/[0.06] mx-1" />
+
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.05] text-[11px] text-white/30">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             {nodes.length} nodes · {edges.length} edges
           </div>
-          <div className="h-5 w-px bg-white/[0.06]" />
+          <div className="h-5 w-px bg-white/[0.06] mx-1" />
           <button onClick={onSave} disabled={isSaving}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-[13px] font-semibold shadow-lg shadow-violet-500/20 hover:shadow-violet-500/30 transition-all disabled:opacity-50">
             <Save className="w-3.5 h-3.5" /> {isSaving ? 'Saving...' : 'Save'}
@@ -596,13 +944,25 @@ function FlowEditor() {
           </div>
 
           {/* Keyboard hints */}
-          <div className="p-3 border-t border-white/[0.04] space-y-1.5">
+          <div className="p-3 border-t border-white/[0.04] space-y-1">
             <div className="flex items-center gap-2 text-[10px] text-white/15">
               <Keyboard className="w-3 h-3" /> <span>Drag nodes onto canvas</span>
             </div>
             <div className="flex items-center gap-2 text-[10px] text-white/15">
               <span className="px-1 py-0.5 bg-white/[0.04] rounded text-[8px] font-mono">Del</span>
-              <span>Delete selected node</span>
+              <span>Delete selected</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-white/15">
+              <span className="px-1 py-0.5 bg-white/[0.04] rounded text-[8px] font-mono">Ctrl+Z/Y</span>
+              <span>Undo/Redo</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-white/15">
+              <span className="px-1 py-0.5 bg-white/[0.04] rounded text-[8px] font-mono">Ctrl+D</span>
+              <span>Duplicate node</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-white/15">
+              <span className="px-1 py-0.5 bg-white/[0.04] rounded text-[8px] font-mono">Ctrl+C/V</span>
+              <span>Copy/Paste node</span>
             </div>
           </div>
         </div>
@@ -614,13 +974,23 @@ function FlowEditor() {
             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             nodeTypes={nodeTypes}
-            onNodeClick={(_, node) => setSelectedNode(node)}
-            onPaneClick={() => setSelectedNode(null)}
+            onNodeClick={(_, node) => { setSelectedNode(node); setSelectedEdge(null); }}
+            onEdgeClick={(_, edge) => { setSelectedEdge(edge); setSelectedNode(null); }}
+            onPaneClick={() => { setSelectedNode(null); setSelectedEdge(null); }}
             onDrop={onDrop} onDragOver={onDragOver}
+            isValidConnection={isValidConnection}
             fitView
-            defaultEdgeOptions={{ animated: true, style: { stroke: '#7c3aed50', strokeWidth: 2 } }}
+            snapToGrid={snapToGrid}
+            snapGrid={[20, 20]}
+            defaultEdgeOptions={{
+              animated: true,
+              style: { stroke: '#7c3aed50', strokeWidth: 2 },
+              markerEnd: { type: MarkerType.ArrowClosed, color: '#7c3aed60', width: 12, height: 12 },
+            }}
             proOptions={{ hideAttribution: true }}
             className="!bg-[#0a0a14]"
+            deleteKeyCode="Delete"
+            multiSelectionKeyCode="Shift"
           >
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#ffffff08" />
             <Controls
@@ -634,6 +1004,39 @@ function FlowEditor() {
               zoomable pannable
             />
           </ReactFlow>
+
+          {/* Validation message toast */}
+          {validationMsg && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[12px] font-medium shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-300">
+              <CheckCircle2 className="w-3.5 h-3.5 inline mr-1.5" />{validationMsg}
+            </div>
+          )}
+
+          {/* Simulation overlay */}
+          {simulating && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl bg-[#1a1a2e] border border-amber-500/20 shadow-2xl shadow-amber-500/10 backdrop-blur-xl">
+              <div className="flex items-center gap-2 text-amber-400/80 text-[12px] font-medium">
+                <Play className="w-3.5 h-3.5" /> Simulation
+              </div>
+              <div className="h-4 w-px bg-white/[0.08]" />
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setSimStep(s => Math.max(0, s - 1))} disabled={simStep === 0}
+                  className="px-2.5 py-1 rounded-lg bg-white/[0.05] text-white/40 hover:text-white/70 text-[11px] disabled:opacity-20 transition-all">
+                  Prev
+                </button>
+                <span className="text-[12px] text-white/40 font-mono min-w-[60px] text-center">{simStep + 1} / {nodes.length}</span>
+                <button onClick={() => setSimStep(s => Math.min(nodes.length - 1, s + 1))} disabled={simStep >= nodes.length - 1}
+                  className="px-2.5 py-1 rounded-lg bg-white/[0.05] text-white/40 hover:text-white/70 text-[11px] disabled:opacity-20 transition-all">
+                  Next
+                </button>
+              </div>
+              <div className="h-4 w-px bg-white/[0.08]" />
+              <button onClick={() => setSimulating(false)}
+                className="text-[11px] text-red-400/60 hover:text-red-400 transition-all px-2 py-1">
+                Exit
+              </button>
+            </div>
+          )}
 
           {/* Empty state overlay */}
           {nodes.length === 0 && (
@@ -653,7 +1056,75 @@ function FlowEditor() {
           )}
         </div>
 
-        {/* ── Right Panel — Properties ── */}
+        {/* ── Edge Properties Panel ── */}
+        {selectedEdge && !selectedNode && (
+          <div className="w-[320px] border-l border-white/[0.05] bg-[#0c0c18]/95 backdrop-blur-xl flex flex-col z-20 flex-shrink-0 animate-in slide-in-from-right-5 duration-200">
+            <div className="px-4 py-3 border-b border-white/[0.04] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/[0.05]">
+                  <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                </div>
+                <div>
+                  <div className="text-[13px] font-semibold text-white/80">Edge</div>
+                  <div className="text-[10px] text-white/25 font-mono">{selectedEdge.source} → {selectedEdge.target}</div>
+                </div>
+              </div>
+              <button onClick={() => setSelectedEdge(null)} className="p-1.5 rounded-lg hover:bg-white/[0.05] text-white/25 hover:text-white/60 transition-all">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+              <PropSection label="Edge Label">
+                <Input value={selectedEdge.label || ''} onChange={(e) => {
+                  const label = e.target.value;
+                  setEdges((eds) => eds.map(ed => ed.id === selectedEdge.id ? { ...ed, label, style: { ...ed.style }, animated: ed.animated } : ed));
+                  setSelectedEdge({ ...selectedEdge, label });
+                }}
+                  className="bg-white/[0.03] border-white/[0.06] text-white/80 text-[12px] rounded-xl h-10 focus:border-cyan-500/30"
+                  placeholder="e.g. Success path" />
+              </PropSection>
+              <PropSection label="Edge Style">
+                <select value={(selectedEdge.style as any)?.stroke || '#7c3aed'}
+                  onChange={(e) => {
+                    const color = e.target.value;
+                    setEdges((eds) => eds.map(ed => ed.id === selectedEdge.id ? { ...ed, style: { ...ed.style as any, stroke: color } } : ed));
+                    setSelectedEdge({ ...selectedEdge, style: { ...selectedEdge.style as any, stroke: color } });
+                  }}
+                  className="w-full h-10 px-3 bg-white/[0.03] border border-white/[0.06] text-white/70 text-[12px] rounded-xl">
+                  <option value="#7c3aed">Violet</option>
+                  <option value="#22c55e">Green</option>
+                  <option value="#ef4444">Red</option>
+                  <option value="#f59e0b">Amber</option>
+                  <option value="#06b6d4">Cyan</option>
+                  <option value="#ec4899">Pink</option>
+                  <option value="#ffffff">White</option>
+                </select>
+              </PropSection>
+              <PropSection label="Animated">
+                <div className="flex items-center gap-2 mt-2">
+                  <button onClick={() => {
+                    const anim = !selectedEdge.animated;
+                    setEdges((eds) => eds.map(ed => ed.id === selectedEdge.id ? { ...ed, animated: anim } : ed));
+                    setSelectedEdge({ ...selectedEdge, animated: anim });
+                  }}
+                    className={`px-4 py-2 rounded-xl text-[12px] font-medium transition-all ${selectedEdge.animated ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-white/[0.03] text-white/40 border border-white/[0.06]'}`}>
+                    {selectedEdge.animated ? 'On' : 'Off'}
+                  </button>
+                  <button onClick={() => {
+                    // Delete edge
+                    setEdges((eds) => eds.filter(ed => ed.id !== selectedEdge.id));
+                    setSelectedEdge(null);
+                  }}
+                    className="px-4 py-2 rounded-xl bg-red-500/10 text-red-400 text-[12px] font-medium border border-red-500/20 hover:bg-red-500/20 transition-all">
+                    Delete Edge
+                  </button>
+                </div>
+              </PropSection>
+            </div>
+          </div>
+        )}
+
+        {/* ── Right Panel — Node Properties ── */}
         {selectedNode && (
           <div className="w-[320px] border-l border-white/[0.05] bg-[#0c0c18]/95 backdrop-blur-xl flex flex-col z-20 flex-shrink-0 animate-in slide-in-from-right-5 duration-200">
             {/* Panel Header */}
@@ -975,6 +1446,15 @@ function FlowEditor() {
                 <PropSection label="End Message">
                   <Input value={selectedNode.data.message} onChange={(e) => updateNodeData('message', e.target.value)}
                     className="bg-white/[0.03] border-white/[0.06] text-white/70 text-[12px] rounded-xl h-10 focus:border-red-500/30" placeholder="Goodbye!" />
+                </PropSection>
+              )}
+
+              {/* -- Comment / Note -- */}
+              {selectedNode.type === 'comment' && (
+                <PropSection label="Note Text">
+                  <Textarea value={selectedNode.data.text} onChange={(e) => updateNodeData('text', e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] text-yellow-400/80 text-[12px] rounded-xl min-h-[120px] placeholder:text-white/20 focus:border-yellow-500/30 font-mono italic"
+                    placeholder="Add documentation notes here..." />
                 </PropSection>
               )}
             </div>

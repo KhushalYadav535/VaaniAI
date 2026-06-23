@@ -74,6 +74,53 @@ const defaultDraft = (): CampaignDraft => ({
   },
 })
 
+const CAMPAIGN_TEMPLATES = [
+  {
+    name: 'Inbound Lead Follow-Up',
+    desc: 'Call warm leads within 24h of signup',
+    draft: (): CampaignDraft => ({
+      ...defaultDraft(),
+      name: 'Inbound Lead Follow-Up',
+      schedule: { timezone: 'Asia/Kolkata', dailyStartHour: 10, dailyEndHour: 20, daysOfWeek: [1, 2, 3, 4, 5, 6] },
+      retryPolicy: { maxAttempts: 4, backoffMinutes: 15, backoffStrategy: 'exponential', retryOnStatuses: ['no-answer', 'busy', 'failed'] },
+      throttle: { maxConcurrentCalls: 3, callsPerMinute: 20 },
+    }),
+  },
+  {
+    name: 'Debt Collection Notice',
+    desc: 'Payment reminder sequence for overdue accounts',
+    draft: (): CampaignDraft => ({
+      ...defaultDraft(),
+      name: 'Debt Collection – Round 1',
+      schedule: { timezone: 'Asia/Kolkata', dailyStartHour: 9, dailyEndHour: 18, daysOfWeek: [1, 2, 3, 4, 5] },
+      retryPolicy: { maxAttempts: 5, backoffMinutes: 60, backoffStrategy: 'fixed', retryOnStatuses: ['no-answer', 'busy', 'failed'] },
+      throttle: { maxConcurrentCalls: 2, callsPerMinute: 10 },
+    }),
+  },
+  {
+    name: 'Customer Satisfaction Survey',
+    desc: 'Post-interaction NPS / CSAT calls',
+    draft: (): CampaignDraft => ({
+      ...defaultDraft(),
+      name: 'CSAT Survey – Post-Call',
+      schedule: { timezone: 'Asia/Kolkata', dailyStartHour: 11, dailyEndHour: 21, daysOfWeek: [1, 2, 3, 4, 5, 6, 7] },
+      retryPolicy: { maxAttempts: 2, backoffMinutes: 30, backoffStrategy: 'exponential', retryOnStatuses: ['no-answer'] },
+      throttle: { maxConcurrentCalls: 10, callsPerMinute: 60 },
+    }),
+  },
+  {
+    name: 'Appointment Reminder',
+    desc: '24h-before reminder with confirmation',
+    draft: (): CampaignDraft => ({
+      ...defaultDraft(),
+      name: 'Appointment Reminder',
+      schedule: { timezone: 'Asia/Kolkata', dailyStartHour: 8, dailyEndHour: 22, daysOfWeek: [1, 2, 3, 4, 5, 6, 7] },
+      retryPolicy: { maxAttempts: 3, backoffMinutes: 10, backoffStrategy: 'fixed', retryOnStatuses: ['no-answer', 'busy'] },
+      throttle: { maxConcurrentCalls: 15, callsPerMinute: 100 },
+    }),
+  },
+]
+
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<any[]>([])
   const [agents, setAgents] = useState<any[]>([])
@@ -82,6 +129,7 @@ export default function CampaignsPage() {
   const [draft, setDraft] = useState<CampaignDraft>(defaultDraft())
   const [creating, setCreating] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   useEffect(() => { fetchData() }, [])
 
@@ -183,14 +231,48 @@ export default function CampaignsPage() {
                 <p className="text-sm text-slate-500 font-light">Outbound dialer with schedules, retries, and DNC.</p>
               </div>
             </div>
-            <Button
-              type="button"
-              onClick={() => setShowCreate(!showCreate)}
-              className="bg-gradient-to-r from-violet-600 to-purple-600 text-white font-light rounded-xl"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New Campaign
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* Templates dropdown */}
+              <div className="relative">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowTemplates(!showTemplates)}
+                  className="rounded-xl text-xs font-light border-slate-200 dark:border-slate-700"
+                  onBlur={() => setTimeout(() => setShowTemplates(false), 200)}
+                >
+                  Templates
+                </Button>
+                {showTemplates && (
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-slate-900 backdrop-blur-xl border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 p-2 space-y-1">
+                    {CAMPAIGN_TEMPLATES.map((tpl) => (
+                      <button
+                        key={tpl.name}
+                        type="button"
+                        className="w-full text-left p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        onClick={() => {
+                          const d = tpl.draft()
+                          setDraft(d)
+                          setShowCreate(true)
+                          setShowTemplates(false)
+                        }}
+                      >
+                        <div className="text-sm font-medium text-slate-800 dark:text-slate-200">{tpl.name}</div>
+                        <div className="text-[10px] text-slate-500">{tpl.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Button
+                type="button"
+                onClick={() => setShowCreate(!showCreate)}
+                className="bg-gradient-to-r from-violet-600 to-purple-600 text-white font-light rounded-xl"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New Campaign
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -221,7 +303,26 @@ export default function CampaignsPage() {
               </div>
             </div>
             <div>
-              <label className="text-xs font-light text-slate-500 mb-1 block">Phone Numbers (one per line, with country code)</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-light text-slate-500">Phone Numbers (one per line, with country code)</label>
+                <label className="text-[10px] cursor-pointer text-violet-500 hover:text-violet-700 dark:hover:text-violet-300 hover:underline">
+                  <input type="file" accept=".csv,.txt" className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      const reader = new FileReader()
+                      reader.onload = (ev) => {
+                        const text = ev.target?.result as string
+                        const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l && !l.startsWith(','))
+                        setDraft(p => ({ ...p, numbersText: lines.join('\n') }))
+                      }
+                      reader.readAsText(file)
+                      e.target.value = ''
+                    }}
+                  />
+                  Import CSV
+                </label>
+              </div>
               <textarea
                 value={draft.numbersText}
                 onChange={e => setDraft(p => ({ ...p, numbersText: e.target.value }))}
@@ -433,9 +534,11 @@ export default function CampaignsPage() {
           return (
             <div key={camp._id} className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200/50 dark:border-slate-800/50 p-6 relative group hover:shadow-xl transition-all">
               {/* Status badge */}
-              <div className="absolute top-4 right-4 text-xs font-light flex items-center gap-1.5 px-2.5 py-1 rounded-full border bg-white dark:bg-slate-950">
+              <div className={`absolute top-4 right-4 text-xs font-light flex items-center gap-1.5 px-2.5 py-1 rounded-full border bg-white dark:bg-slate-950 shadow-sm ${
+                camp.status === 'running' ? 'border-green-300 dark:border-green-700' : ''
+              }`}>
                 {camp.status === 'running' && <><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Running</>}
-                {camp.status === 'paused' && <><div className="w-2 h-2 rounded-full bg-orange-500" /> Paused</>}
+                {camp.status === 'paused' && <><div className="w-2 h-2 rounded-full bg-orange-500" /> Paused {camp.progressPct ? `(${camp.progressPct}%)` : ''}</>}
                 {camp.status === 'completed' && <><CheckCircle2 className="w-3 h-3 text-blue-500" /> Completed</>}
                 {camp.status === 'draft' && <><div className="w-2 h-2 rounded-full bg-slate-400" /> Draft</>}
                 {camp.status === 'scheduled' && <><Clock className="w-3 h-3 text-purple-500" /> Scheduled</>}
@@ -455,28 +558,74 @@ export default function CampaignsPage() {
                 </div>
               )}
 
+              {/* Live status indicators */}
+              {camp.status === 'running' && (
+                <div className="flex items-center gap-2 mb-3 text-[11px] text-green-600 dark:text-green-400 animate-pulse">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  Dialing in progress...
+                </div>
+              )}
+
               {/* Progress */}
               <div className="space-y-2 mb-6">
                 <div className="flex justify-between text-xs font-light text-slate-600 dark:text-slate-400">
                   <span>Progress ({done}/{total})</span>
                   <span>{pct}%</span>
                 </div>
-                <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
-                  <div className="h-full bg-green-500" style={{ width: `${total > 0 ? (camp.completedCount / total) * 100 : 0}%` }} />
-                  <div className="h-full bg-red-500" style={{ width: `${total > 0 ? (camp.failedCount / total) * 100 : 0}%` }} />
-                </div>
-                <div className="flex gap-3 text-[11px] font-light pt-1 flex-wrap">
-                  <span className="text-green-600 dark:text-green-400">✓ {camp.completedCount || 0}</span>
-                  <span className="text-red-600 dark:text-red-400">✕ {camp.failedCount || 0}</span>
-                  {camp.retriedCount > 0 && (
-                    <span className="text-amber-600 dark:text-amber-400">↻ {camp.retriedCount}</span>
-                  )}
+                <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex shadow-inner">
+                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-1000" style={{ width: `${total > 0 ? (camp.completedCount / total) * 100 : 0}%` }} />
+                  <div className="h-full bg-gradient-to-r from-red-500 to-rose-400 transition-all duration-1000" style={{ width: `${total > 0 ? (camp.failedCount / total) * 100 : 0}%` }} />
                   {camp.dncSkippedCount > 0 && (
-                    <span className="text-slate-500">⊘ {camp.dncSkippedCount} DNC</span>
+                    <div className="h-full bg-gradient-to-r from-slate-400 to-slate-300 dark:from-slate-600 dark:to-slate-500 transition-all duration-1000" style={{ width: `${total > 0 ? (camp.dncSkippedCount / total) * 100 : 0}%` }} />
+                  )}
+                </div>
+
+                {/* Detailed stats grid */}
+                <div className="grid grid-cols-4 gap-2 mt-3">
+                  <div className="bg-green-50 dark:bg-green-500/5 rounded-xl p-2 text-center border border-green-200/50 dark:border-green-500/10">
+                    <div className="text-lg font-semibold text-green-600 dark:text-green-400">{camp.completedCount || 0}</div>
+                    <div className="text-[9px] uppercase tracking-wider text-green-500/60">Completed</div>
+                  </div>
+                  <div className="bg-red-50 dark:bg-red-500/5 rounded-xl p-2 text-center border border-red-200/50 dark:border-red-500/10">
+                    <div className="text-lg font-semibold text-red-600 dark:text-red-400">{camp.failedCount || 0}</div>
+                    <div className="text-[9px] uppercase tracking-wider text-red-500/60">Failed</div>
+                  </div>
+                  <div className="bg-amber-50 dark:bg-amber-500/5 rounded-xl p-2 text-center border border-amber-200/50 dark:border-amber-500/10">
+                    <div className="text-lg font-semibold text-amber-600 dark:text-amber-400">{camp.retriedCount || 0}</div>
+                    <div className="text-[9px] uppercase tracking-wider text-amber-500/60">Retried</div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-2 text-center border border-slate-200/50 dark:border-slate-700/50">
+                    <div className="text-lg font-semibold text-slate-600 dark:text-slate-400">{camp.dncSkippedCount || 0}</div>
+                    <div className="text-[9px] uppercase tracking-wider text-slate-500/60">DNC</div>
+                  </div>
+                </div>
+
+                {/* Status badges */}
+                <div className="flex gap-1.5 pt-1 flex-wrap">
+                  {camp.status === 'running' && (
+                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800/50">
+                      <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" /> Active
+                    </span>
+                  )}
+                  {camp.schedule?.timezone && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">{camp.schedule.timezone}</span>
+                  )}
+                  {camp.schedule?.daysOfWeek?.length > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">{camp.schedule.daysOfWeek.length}d/wk</span>
                   )}
                 </div>
               </div>
 
+              {/* Per-campaign analytics */}
+              <div className="flex items-center justify-end -mt-1 mb-1">
+                <button
+                  type="button"
+                  onClick={() => window.location.href = `/analytics?campaignId=${camp._id}`}
+                  className="text-[10px] text-violet-500 hover:text-violet-700 dark:hover:text-violet-300 hover:underline flex items-center gap-1"
+                >
+                  View Analytics &rarr;
+                </button>
+              </div>
               {/* Actions */}
               <div className="flex items-center gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
                 {camp.status === 'running' ? (

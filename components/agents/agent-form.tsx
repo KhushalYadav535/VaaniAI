@@ -18,9 +18,9 @@ import {
 } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
-import { 
-  Bot, Mic, BrainCircuit, Wrench, PhoneCall, Radio, MessageSquare, 
-  Settings2, Sparkles, Volume2, Globe, Activity 
+import {
+  Bot, Mic, BrainCircuit, Wrench, PhoneCall, Radio, MessageSquare,
+  Settings2, Sparkles, Volume2, Globe, Activity, Users
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -103,8 +103,8 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
       maxDuration: 600,
       voiceProvider: 'edge-tts',
       language: 'en',
-      llmProvider: 'groq',
-      llmModel: 'llama-3.1-8b-instant',
+      llmProvider: 'gemini',
+      llmModel: 'gemini-3.1-flash-lite',
       ...defaultValues,
     },
   })
@@ -164,7 +164,7 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
   }
   const updateVisualTool = (idx: number, field: string, value: string) => {
     const updated = [...visualTools]
-    ;(updated[idx] as any)[field] = value
+      ; (updated[idx] as any)[field] = value
     setVisualTools(updated)
     syncToolsToJson(updated)
   }
@@ -181,16 +181,116 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
   }
   const updateToolParam = (toolIdx: number, paramIdx: number, field: string, value: any) => {
     const updated = [...visualTools]
-    ;(updated[toolIdx].parameters[paramIdx] as any)[field] = value
+      ; (updated[toolIdx].parameters[paramIdx] as any)[field] = value
     setVisualTools(updated)
     syncToolsToJson(updated)
   }
 
   const llmModels: Record<string, string[]> = {
-    openai: ['gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
+    cerebras: ['llama-4-scout-17b-16e-instruct', 'llama-3.3-70b', 'qwen-3-32b'],
+    openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
     groq: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b'],
-    gemini: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'],
+    gemini: ['gemini-3.1-flash-lite', 'gemini-3-flash', 'gemini-3.5-flash', 'gemini-3.1-pro'],
   }
+
+  // ── Import / Export ────────────────────────────────────────────────
+  const exportConfig = () => {
+    const data = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      config: {
+        name: watch('name'),
+        systemPrompt: watch('systemPrompt'),
+        firstMessage: watch('firstMessage'),
+        voiceProvider: watch('voiceProvider'),
+        voiceId: watch('voiceId'),
+        language: watch('language'),
+        llmProvider: watch('llmProvider'),
+        llmModel: watch('llmModel'),
+        temperature: watch('temperature'),
+        maxDuration: watch('maxDuration'),
+        toolsJson: watch('toolsJson'),
+        knowledgeBaseId: watch('knowledgeBaseId'),
+        workflowId: watch('workflowId'),
+        customLlmUrl: watch('customLlmUrl'),
+        transferToAgentId: watch('transferToAgentId'),
+        voiceSpeed: watch('voiceSpeed'),
+        interruptionSensitivity: watch('interruptionSensitivity'),
+        backgroundDenoising: watch('backgroundDenoising'),
+        fillerWords: watch('fillerWords'),
+        ambientNoise: watch('ambientNoise'),
+        transferNumber: watch('transferNumber'),
+        voicemailMessage: watch('voicemailMessage'),
+        sendSMS: watch('sendSMS'),
+        sendWhatsApp: watch('sendWhatsApp'),
+        smsTemplate: watch('smsTemplate'),
+        whatsappTemplate: watch('whatsappTemplate'),
+      }
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `${watch('name') || 'agent'}-config.json`
+    a.click(); URL.revokeObjectURL(url)
+  }
+
+  const importConfig = () => {
+    const input = document.createElement('input')
+    input.type = 'file'; input.accept = '.json'
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(ev.target?.result as string)
+          const cfg = parsed.config || parsed
+          if (cfg.name) setValue('name', cfg.name)
+          if (cfg.systemPrompt) setValue('systemPrompt', cfg.systemPrompt)
+          if (cfg.firstMessage) setValue('firstMessage', cfg.firstMessage)
+          if (cfg.voiceProvider) setValue('voiceProvider', cfg.voiceProvider)
+          if (cfg.voiceId) setValue('voiceId', cfg.voiceId)
+          if (cfg.language) setValue('language', cfg.language)
+          if (cfg.llmProvider) setValue('llmProvider', cfg.llmProvider)
+          if (cfg.llmModel) setValue('llmModel', cfg.llmModel)
+          if (cfg.temperature != null) setValue('temperature', cfg.temperature)
+          if (cfg.maxDuration) setValue('maxDuration', cfg.maxDuration)
+          if (cfg.toolsJson) setValue('toolsJson', cfg.toolsJson)
+          if (cfg.knowledgeBaseId) setValue('knowledgeBaseId', cfg.knowledgeBaseId)
+          if (cfg.workflowId) setValue('workflowId', cfg.workflowId)
+          if (cfg.customLlmUrl) setValue('customLlmUrl', cfg.customLlmUrl)
+          if (cfg.transferToAgentId) setValue('transferToAgentId', cfg.transferToAgentId)
+          if (cfg.voiceSpeed != null) setValue('voiceSpeed', cfg.voiceSpeed)
+          if (cfg.interruptionSensitivity != null) setValue('interruptionSensitivity', cfg.interruptionSensitivity)
+          if (cfg.backgroundDenoising) setValue('backgroundDenoising', cfg.backgroundDenoising)
+          if (cfg.fillerWords != null) setValue('fillerWords', cfg.fillerWords)
+          if (cfg.ambientNoise) setValue('ambientNoise', cfg.ambientNoise)
+          if (cfg.transferNumber) setValue('transferNumber', cfg.transferNumber)
+          if (cfg.voicemailMessage) setValue('voicemailMessage', cfg.voicemailMessage)
+          if (cfg.sendSMS != null) setValue('sendSMS', cfg.sendSMS)
+          if (cfg.sendWhatsApp != null) setValue('sendWhatsApp', cfg.sendWhatsApp)
+          if (cfg.smsTemplate) setValue('smsTemplate', cfg.smsTemplate)
+          if (cfg.whatsappTemplate) setValue('whatsappTemplate', cfg.whatsappTemplate)
+          toast.success('Agent config imported')
+        } catch {
+          toast.error('Invalid config file')
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
+  }
+
+  // ── Cost Estimate ──────────────────────────────────────────────────
+  const costEstimate = (() => {
+    const perMinLLM = { cerebras: 0.0006, openai: 0.0025, groq: 0.0003, gemini: 0.00015 }
+    const perMinTTS = { 'edge-tts': 0.0001, cartesia: 0.002, 'eleven-labs': 0.008, azure: 0.004 }
+    const perMinSTT = 0.0002
+    const llm = perMinLLM[llmProvider as keyof typeof perMinLLM] || 0.0005
+    const tts = perMinTTS[voiceProvider as keyof typeof perMinTTS] || 0.0001
+    const total = (llm + tts + perMinSTT)
+    return { llm, tts, stt: perMinSTT, total, perHour: total * 60, per10k: total * 10000 }
+  })()
 
   const tabs = [
     { id: 'identity', label: 'Identity', icon: Bot, desc: 'Personality & Prompt' },
@@ -211,6 +311,16 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
             Configuration
           </h2>
           <p className="text-sm text-slate-500 mt-1">Configure your AI agent parameters</p>
+          <div className="flex gap-2 mt-4">
+            <Button type="button" variant="outline" size="sm" onClick={exportConfig}
+              className="flex-1 h-8 text-[10px] rounded-lg border-slate-200 dark:border-slate-700 gap-1">
+              <span className="text-xs">&darr;</span> Export
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={importConfig}
+              className="flex-1 h-8 text-[10px] rounded-lg border-slate-200 dark:border-slate-700 gap-1">
+              <span className="text-xs">&uarr;</span> Import
+            </Button>
+          </div>
         </div>
 
         <div className="flex lg:flex-col gap-2 overflow-x-auto pb-4 lg:pb-0 hide-scrollbar">
@@ -224,8 +334,8 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   "flex items-center gap-3 w-full p-3 rounded-xl transition-all duration-300 text-left whitespace-nowrap lg:whitespace-normal group relative overflow-hidden",
-                  isActive 
-                    ? "bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-200 dark:border-cyan-500/30 text-cyan-600 dark:text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)]" 
+                  isActive
+                    ? "bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-200 dark:border-cyan-500/30 text-cyan-600 dark:text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
                     : "bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/50 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700"
                 )}
               >
@@ -291,7 +401,7 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
 
             {/* TAB: INTELLIGENCE */}
             <div className={cn("space-y-6 animate-in fade-in slide-in-from-right-4 duration-500", activeTab === 'model' ? 'block' : 'hidden')}>
-               <div className="mb-8 border-b border-slate-200 dark:border-slate-800 pb-4">
+              <div className="mb-8 border-b border-slate-200 dark:border-slate-800 pb-4">
                 <h3 className="text-2xl font-light text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <BrainCircuit className="w-6 h-6 text-cyan-500 dark:text-cyan-400" /> Core Intelligence
                 </h3>
@@ -305,6 +415,7 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
                     <Select value={llmProvider} onValueChange={(value) => { setValue('llmProvider', value); setValue('llmModel', llmModels[value][0]) }}>
                       <SelectTrigger className={selectTriggerCls}><SelectValue /></SelectTrigger>
                       <SelectContent className={selectContentCls}>
+                        <SelectItem value="cerebras">⚡ Cerebras (World&apos;s Fastest)</SelectItem>
                         <SelectItem value="openai">OpenAI (GPT)</SelectItem>
                         <SelectItem value="groq">Groq (LPU Fast)</SelectItem>
                         <SelectItem value="gemini">Google Gemini</SelectItem>
@@ -337,9 +448,38 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
                   </div>
 
                   <div>
-                     <Label className={labelCls}>Custom LLM URL (BYOL)</Label>
-                     <Input placeholder="https://your-api.com/v1/chat" {...register('customLlmUrl')} className={inputCls} />
+                    <Label className={labelCls}>Custom LLM URL (BYOL)</Label>
+                    <Input placeholder="https://your-api.com/v1/chat" {...register('customLlmUrl')} className={inputCls} />
                   </div>
+                </div>
+              </div>
+
+              {/* Cost Preview */}
+              <div className="bg-gradient-to-r from-cyan-500/5 to-blue-500/5 border border-cyan-500/20 rounded-2xl p-4">
+                <div className="flex items-center gap-2 mb-2 text-xs font-medium text-cyan-600 dark:text-cyan-400 uppercase tracking-wider">
+                  <Sparkles className="w-3.5 h-3.5" /> Estimated Cost Per Minute
+                </div>
+                <div className="grid grid-cols-4 gap-3 text-center">
+                  <div>
+                    <div className="text-lg font-mono font-semibold text-slate-800 dark:text-slate-100">${costEstimate.llm.toFixed(4)}</div>
+                    <div className="text-[10px] text-slate-500">LLM</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-mono font-semibold text-slate-800 dark:text-slate-100">${costEstimate.tts.toFixed(4)}</div>
+                    <div className="text-[10px] text-slate-500">TTS</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-mono font-semibold text-slate-800 dark:text-slate-100">${costEstimate.stt.toFixed(4)}</div>
+                    <div className="text-[10px] text-slate-500">STT</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-mono font-semibold text-cyan-600 dark:text-cyan-400">${costEstimate.total.toFixed(4)}</div>
+                    <div className="text-[10px] text-slate-500">Total/min</div>
+                  </div>
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-cyan-500/10">
+                  <span>~${costEstimate.perHour.toFixed(3)}/hour</span>
+                  <span>~${costEstimate.per10k.toFixed(2)}/10k min</span>
                 </div>
               </div>
 
@@ -372,7 +512,7 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
 
             {/* TAB: VOICE & AUDIO */}
             <div className={cn("space-y-6 animate-in fade-in slide-in-from-right-4 duration-500", activeTab === 'voice' ? 'block' : 'hidden')}>
-               <div className="mb-8 border-b border-slate-200 dark:border-slate-800 pb-4">
+              <div className="mb-8 border-b border-slate-200 dark:border-slate-800 pb-4">
                 <h3 className="text-2xl font-light text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <Mic className="w-6 h-6 text-cyan-500 dark:text-cyan-400" /> Voice Synthesis
                 </h3>
@@ -381,7 +521,7 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <Label className={labelCls}><Globe className="w-4 h-4 text-blue-400"/> Primary Language</Label>
+                  <Label className={labelCls}><Globe className="w-4 h-4 text-blue-400" /> Primary Language</Label>
                   <Select value={language} onValueChange={(value) => setValue('language', value)}>
                     <SelectTrigger className={selectTriggerCls}><SelectValue /></SelectTrigger>
                     <SelectContent className={selectContentCls}>
@@ -476,13 +616,36 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
                     </Select>
                   </div>
                 </div>
+                {/* Voice Preview (browser TTS) */}
+                <div className="md:col-span-2">
+                  <div className="flex items-center gap-3 p-3 bg-cyan-50 dark:bg-cyan-500/5 rounded-xl border border-cyan-200 dark:border-cyan-500/10">
+                    <Button type="button" size="sm" variant="outline"
+                      onClick={() => {
+                        const text = watch('firstMessage') || 'Hello, this is a test voice preview.';
+                        const utterance = new SpeechSynthesisUtterance(text);
+                        utterance.rate = watch('voiceSpeed') || 1.0;
+                        utterance.lang = watch('language') === 'hi' ? 'hi-IN' : 'en-US';
+                        speechSynthesis.cancel();
+                        speechSynthesis.speak(utterance);
+                      }}
+                      className="h-8 px-3 text-xs border-cyan-300 dark:border-cyan-700 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100 dark:hover:bg-cyan-500/10 rounded-lg gap-1.5">
+                      <Volume2 className="w-3.5 h-3.5" /> Preview Voice
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost"
+                      onClick={() => speechSynthesis.cancel()}
+                      className="h-8 px-2 text-xs text-slate-400 hover:text-slate-600">
+                      Stop
+                    </Button>
+                    <span className="text-[10px] text-slate-400">Uses browser TTS for quick preview</span>
+                  </div>
+                </div>
               </div>
 
               <div className="p-5 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-800/50 mt-4 space-y-6">
                 <div className="flex items-center gap-2 mb-2 text-cyan-600 dark:text-cyan-400 font-medium text-sm border-b border-slate-200 dark:border-slate-800/50 pb-2">
                   <Volume2 className="w-4 h-4" /> Acoustic Tuning
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
                     <div className="flex justify-between mb-2">
@@ -552,8 +715,8 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
                 </div>
 
                 <div className="p-5 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-800/50 space-y-4">
-                  <h4 className="text-cyan-600 dark:text-cyan-400 font-medium text-sm flex items-center gap-2"><Activity className="w-4 h-4"/> Handoff Protocol</h4>
-                  
+                  <h4 className="text-cyan-600 dark:text-cyan-400 font-medium text-sm flex items-center gap-2"><Activity className="w-4 h-4" /> Handoff Protocol</h4>
+
                   <div>
                     <Label className={labelCls}>Transfer PSTN Number</Label>
                     <Input placeholder="+1 234 567 8900" {...register('transferNumber')} className={inputCls} />
@@ -569,6 +732,32 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Squad / Multi-Agent Section */}
+                  <div className="pt-4 border-t border-slate-200 dark:border-slate-800/50">
+                    <div className="flex items-center gap-2 mb-3 text-xs font-medium text-cyan-600 dark:text-cyan-400 uppercase tracking-wider">
+                      <Users className="w-3.5 h-3.5" /> Squad Members
+                    </div>
+                    <p className="text-xs text-slate-500 mb-3">Route to different agents based on intent or context. Agents receive full conversation history.</p>
+                    <div className="space-y-2">
+                      {[...Array(3)].map((_, i) => (
+                        <div key={i} className="flex gap-2 items-center">
+                          <Select value={watch(`transferToAgentId_${i}` as any) || 'none'}
+                            onValueChange={(val) => setValue(`transferToAgentId_${i}` as any, val === 'none' ? '' : val)}>
+                            <SelectTrigger className="flex-1 h-9 text-xs bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-700/50 rounded-lg">
+                              <SelectValue placeholder="Select agent..." />
+                            </SelectTrigger>
+                            <SelectContent className={selectContentCls}>
+                              <SelectItem value="none">None</SelectItem>
+                              {agents.filter(a => a._id !== watch('transferToAgentId')).map(ag => (
+                                <SelectItem key={ag._id} value={ag._id}>{ag.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 <div>
@@ -581,7 +770,7 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
 
             {/* TAB: TOOLS */}
             <div className={cn("space-y-6 animate-in fade-in slide-in-from-right-4 duration-500", activeTab === 'tools' ? 'block' : 'hidden')}>
-               <div className="mb-8 border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
+              <div className="mb-8 border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
                 <div>
                   <h3 className="text-2xl font-light text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <Wrench className="w-6 h-6 text-cyan-500 dark:text-cyan-400" /> Function Calling
