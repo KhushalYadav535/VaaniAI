@@ -21,6 +21,8 @@ export default function EditAgentPage() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
 
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5000'
+
   useEffect(() => {
     if (!agentId) return
     agentsApi.getById(agentId)
@@ -138,7 +140,7 @@ export default function EditAgentPage() {
                   <div className="p-4 bg-slate-50 dark:bg-black/50 rounded-xl overflow-x-auto my-4 border border-slate-200 dark:border-slate-800 relative group">
                     <pre className="text-sm font-mono text-emerald-600 dark:text-green-400">
 {`<script 
-  src="${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/widget.js" 
+  src="${BACKEND_URL}/widget.js" 
   data-agent-id="${agent._id}"
   data-color="#06b6d4"
   data-position="bottom-right"
@@ -146,7 +148,7 @@ export default function EditAgentPage() {
                     </pre>
                     <button 
                       onClick={() => {
-                        const code = `<script \n  src="${window.location.origin}/widget.js" \n  data-agent-id="${agent._id}"\n  data-color="#06b6d4"\n  data-position="bottom-right"\n></script>`;
+                        const code = `<script \n  src="${BACKEND_URL}/widget.js" \n  data-agent-id="${agent._id}"\n  data-color="#06b6d4"\n  data-position="bottom-right"\n></script>`;
                         navigator.clipboard.writeText(code);
                         setCopied(true);
                         setTimeout(() => setCopied(false), 2000);

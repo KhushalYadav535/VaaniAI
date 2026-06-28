@@ -18,7 +18,7 @@ export default function WebWidgetPage() {
   const [copied, setCopied] = useState(false)
   const [showWidget, setShowWidget] = useState(false)
 
-  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5000'
 
   useEffect(() => {
     agentsApi.getAll().then(res => {

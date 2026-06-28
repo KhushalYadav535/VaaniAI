@@ -424,13 +424,7 @@ export default function TestAgentPage() {
         break
 
       case 'latency_metrics':
-        if (msg.metrics) {
-          const firstText = msg.metrics.stt_to_first_text_ms
-          const firstAudio = msg.metrics.stt_to_first_audio_ms
-          if (firstText || firstAudio) {
-            setStatusText(`⚡ First text: ${firstText ?? '-'}ms | First audio: ${firstAudio ?? '-'}ms`)
-          }
-        }
+        // Hiding latency metrics from UI as requested
         break
     }
   }
