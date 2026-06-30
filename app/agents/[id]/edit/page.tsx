@@ -94,7 +94,17 @@ export default function EditAgentPage() {
   const [kbOpen, setKbOpen] = useState(false)
   const [kbs, setKbs] = useState<any[]>([])
 
-  const { providers: voiceProviders, loading: voicesLoadingHook } = useVoices()
+  const { providers: voiceProviders, loading: voicesLoadingHook, allVoices } = useVoices()
+
+  useEffect(() => {
+    if (voice && allVoices && allVoices.length > 0) {
+      const v = allVoices.find(x => x.voiceId === voice)
+      if (v) {
+        setVoiceName(v.name)
+        setVoiceProvider(v.providerName || v.provider)
+      }
+    }
+  }, [voice, allVoices])
 
   useEffect(() => {
     knowledgeBaseApi.getAll().then(res => setKbs(res.data)).catch(console.error)
