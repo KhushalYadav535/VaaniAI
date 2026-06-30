@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { AgentCard } from '@/components/agents/agent-card'
+import { CreateAgentModal } from '@/components/agents/create-agent-modal'
 import { Button } from '@/components/ui/button'
 import {
   Plus, Search, LayoutGrid, List, Zap, TrendingUp, Users, Activity,
@@ -78,6 +79,7 @@ export default function AgentsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
 
   const fetchAgents = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -117,6 +119,17 @@ export default function AgentsPage() {
       fetchAgents(true)
     } catch (e) {
       alert('Failed to delete agent')
+    }
+  }
+
+  const handleCreateAgent = async (data: any) => {
+    try {
+      const { agentsApi } = await import('@/lib/api')
+      await agentsApi.create(data)
+      setCreateOpen(false)
+      fetchAgents(true)
+    } catch (e) {
+      alert('Failed to create agent')
     }
   }
 
@@ -184,7 +197,7 @@ export default function AgentsPage() {
                   <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                 </Button>
                 <Button
-                  onClick={() => window.location.href = '/agents/new'}
+                  onClick={() => setCreateOpen(true)}
                   className="h-10 bg-gradient-to-r from-violet-600 via-purple-600 to-pink-600 hover:from-violet-700 hover:via-purple-700 hover:to-pink-700 text-white font-light px-6 shadow-lg shadow-purple-500/25 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/35 hover:scale-105 rounded-xl"
                 >
                   <Plus className="w-4 h-4 mr-2" />
@@ -331,7 +344,7 @@ export default function AgentsPage() {
               {agents.length === 0 ? (
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <Button
-                    onClick={() => window.location.href = '/agents/new'}
+                    onClick={() => setCreateOpen(true)}
                     className="bg-gradient-to-r from-violet-600 via-purple-600 to-pink-600 hover:from-violet-700 hover:via-purple-700 hover:to-pink-700 text-white font-light px-8 shadow-lg shadow-purple-500/25 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/30 hover:scale-105 rounded-xl"
                   >
                     <Plus className="w-4 h-4 mr-2" />
@@ -359,6 +372,13 @@ export default function AgentsPage() {
           </div>
         )}
       </div>
+
+      {/* ── Create Agent Modal ── */}
+      <CreateAgentModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreateAgent}
+      />
     </div>
   )
 }

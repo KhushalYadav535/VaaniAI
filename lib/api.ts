@@ -100,6 +100,13 @@ export const agentsApi = {
     apiRequest('/agents/ab-test', { method: 'POST', body: JSON.stringify(data) }),
 };
 
+// ─── Voices ──────────────────────────────────────────────────────────────────
+
+export const voicesApi = {
+  /** Returns { providers: [{ id, name, voices: [{ voiceId, name, lang, gender }] }] } */
+  getAll: () => apiRequest('/voices'),
+};
+
 // ─── Phone Numbers ───────────────────────────────────────────────────────────
 
 export const numbersApi = {

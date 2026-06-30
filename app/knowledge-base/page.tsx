@@ -327,6 +327,7 @@ export default function KnowledgeBasePage() {
                   <div>
                     <Label>File Upload (PDF or TXT)</Label>
                     <div className="mt-2 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-6 text-center hover:border-purple-400 dark:hover:border-purple-500 transition-colors cursor-pointer"
+                      onClick={() => document.getElementById('file-upload')?.click()}
                       onDragOver={e => e.preventDefault()}
                       onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f && (f.type === 'application/pdf' || f.type === 'text/plain')) setFile(f); else toast.error('Only PDF and TXT files') }}>
                       {file ? (

@@ -43,9 +43,10 @@ const AGENT_COLORS = [
 ]
 
 const LLM_BADGES: Record<string, { label: string; color: string }> = {
-  groq:   { label: 'Groq',   color: 'bg-orange-500/10 text-orange-500 border-orange-500/20' },
-  openai: { label: 'OpenAI', color: 'bg-green-500/10 text-green-500 border-green-500/20' },
-  gemini: { label: 'Gemini', color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
+  openrouter: { label: 'OpenRouter', color: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20' },
+  groq:       { label: 'Groq',       color: 'bg-orange-500/10 text-orange-500 border-orange-500/20' },
+  openai:     { label: 'OpenAI',     color: 'bg-green-500/10 text-green-500 border-green-500/20' },
+  gemini:     { label: 'Gemini',     color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
 }
 
 function getColorForAgent(name: string) {
@@ -61,7 +62,7 @@ export function AgentCard({ agent, onDelete, onRefresh, viewMode = 'grid' }: Age
 
   const avatarGradient = getColorForAgent(agent.name)
   const initials = agent.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-  const llmBadge = LLM_BADGES[agent.llm?.provider] || { label: agent.llm?.provider, color: 'bg-slate-500/10 text-slate-500' }
+  const llmBadge = LLM_BADGES[agent.llm?.provider] || LLM_BADGES['openrouter']
 
   const handleToggleStatus = async () => {
     setIsTogglingStatus(true)

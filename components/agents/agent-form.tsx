@@ -48,8 +48,8 @@ const agentFormSchema = z.object({
   voiceProvider: z.string(),
   voiceId: z.string().optional(),
   language: z.string().default('en'),
-  llmProvider: z.string(),
-  llmModel: z.string(),
+  llmProvider: z.string().optional(),
+  llmModel: z.string().optional(),
   temperature: z.number().min(0).max(1),
   maxDuration: z.number().min(1),
   toolsJson: z.string().optional(),
@@ -103,14 +103,14 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
       maxDuration: 600,
       voiceProvider: 'edge-tts',
       language: 'en',
-      llmProvider: 'gemini',
-      llmModel: 'gemini-3.1-flash-lite',
+      llmProvider: 'openrouter',
+      llmModel: 'meta-llama/llama-3.3-70b-instruct',
       ...defaultValues,
     },
   })
 
   const temperature = watch('temperature')
-  const llmProvider = watch('llmProvider')
+  // llmProvider is fixed to openrouter — not exposed in UI
   const language = watch('language')
   const voiceProvider = watch('voiceProvider') || 'edge-tts'
 
@@ -186,12 +186,7 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
     syncToolsToJson(updated)
   }
 
-  const llmModels: Record<string, string[]> = {
-    cerebras: ['llama-4-scout-17b-16e-instruct', 'llama-3.3-70b', 'qwen-3-32b'],
-    openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-    groq: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b'],
-    gemini: ['gemini-3.1-flash-lite', 'gemini-3-flash', 'gemini-3.5-flash', 'gemini-3.1-pro'],
-  }
+  // llmModels removed — provider is fixed to OpenRouter
 
   // ── Import / Export ────────────────────────────────────────────────
   const exportConfig = () => {
@@ -283,10 +278,9 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
 
   // ── Cost Estimate ──────────────────────────────────────────────────
   const costEstimate = (() => {
-    const perMinLLM = { cerebras: 0.0006, openai: 0.0025, groq: 0.0003, gemini: 0.00015 }
+    const llm = 0.0005 // OpenRouter avg (varies by model)
     const perMinTTS = { 'edge-tts': 0.0001, cartesia: 0.002, 'eleven-labs': 0.008, azure: 0.004 }
     const perMinSTT = 0.0002
-    const llm = perMinLLM[llmProvider as keyof typeof perMinLLM] || 0.0005
     const tts = perMinTTS[voiceProvider as keyof typeof perMinTTS] || 0.0001
     const total = (llm + tts + perMinSTT)
     return { llm, tts, stt: perMinSTT, total, perHour: total * 60, per10k: total * 10000 }
@@ -410,29 +404,15 @@ export function AgentForm({ onSubmit, defaultValues, submitLabel = 'Deploy Agent
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-5">
-                  <div>
-                    <Label className={labelCls}>LLM Provider</Label>
-                    <Select value={llmProvider} onValueChange={(value) => { setValue('llmProvider', value); setValue('llmModel', llmModels[value][0]) }}>
-                      <SelectTrigger className={selectTriggerCls}><SelectValue /></SelectTrigger>
-                      <SelectContent className={selectContentCls}>
-                        <SelectItem value="cerebras">⚡ Cerebras (World&apos;s Fastest)</SelectItem>
-                        <SelectItem value="openai">OpenAI (GPT)</SelectItem>
-                        <SelectItem value="groq">Groq (LPU Fast)</SelectItem>
-                        <SelectItem value="gemini">Google Gemini</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label className={labelCls}>Model Version</Label>
-                    <Select value={watch('llmModel')} onValueChange={(v) => setValue('llmModel', v)}>
-                      <SelectTrigger className={selectTriggerCls}><SelectValue /></SelectTrigger>
-                      <SelectContent className={selectContentCls}>
-                        {(llmModels[llmProvider] || []).map((model) => (
-                          <SelectItem key={model} value={model}>{model}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  {/* LLM Provider & Model hidden — OpenRouter is used by default on the backend */}
+                  <div className="flex items-center gap-3 p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/20">
+                    <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
+                      <BrainCircuit className="w-4 h-4 text-cyan-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200">OpenRouter (Auto-routing)</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Routes to the fastest available model automatically</p>
+                    </div>
                   </div>
                 </div>
 
