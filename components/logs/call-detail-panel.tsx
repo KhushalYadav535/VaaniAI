@@ -15,7 +15,7 @@ import { formatDateTime } from '@/lib/utils'
 import {
   X, TrendingUp, TrendingDown, Minus,
   MessageSquare, Phone, Clock, AlertTriangle,
-  CheckCircle, Target, Lightbulb, Send
+  CheckCircle, Target, Lightbulb, Send, FileJson, FileText
 } from 'lucide-react'
 
 interface CallDetailPanelProps {
@@ -73,6 +73,125 @@ export function CallDetailPanel({
   }
 
   const getSentimentEmoji = (s?: string) => s === 'positive' ? '😊' : s === 'negative' ? '😠' : '😐'
+
+  /** Export all call data as a formatted JSON file */
+  const handleExportJSON = () => {
+    try {
+      const exportData = {
+        id: call._id || call.id,
+        agentName: call.agentName,
+        startTime: call.startTime,
+        duration: call.duration,
+        status: call.status,
+        direction: call.direction,
+        fromNumber: call.fromNumber,
+        sentiment: call.sentiment,
+        customerIntent: call.customerIntent,
+        emotion: call.emotion,
+        summary: call.summary,
+        topics: call.topics,
+        decisions: call.decisions,
+        actionItems: call.actionItems,
+        urgencyLevel: call.urgencyLevel,
+        followUpRequired: call.followUpRequired,
+        transferredTo: call.transferredTo,
+        transferReason: call.transferReason,
+        extractedData: call.extractedData,
+        transcript: call.transcript,
+      }
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `call-${call._id || call.id}-${new Date(call.startTime).toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to export JSON:', err)
+    }
+  }
+
+  /** Download a human-readable text report with full transcript */
+  const handleDownloadReport = () => {
+    try {
+      const lines: string[] = []
+      lines.push('═══════════════════════════════════════════════════')
+      lines.push('                  CALL REPORT')
+      lines.push('═══════════════════════════════════════════════════')
+      lines.push('')
+      lines.push(`Agent          : ${call.agentName || '—'}`)
+      lines.push(`Date/Time      : ${formatDateTime(call.startTime)}`)
+      lines.push(`Duration       : ${formatDuration(call.duration)}`)
+      lines.push(`Direction      : ${call.direction || 'web'}`)
+      lines.push(`From Number    : ${call.fromNumber || '—'}`)
+      lines.push(`Status         : ${call.status}`)
+      lines.push(`Sentiment      : ${call.sentiment || '—'}`)
+      lines.push(`Emotion        : ${call.emotion || '—'}`)
+      lines.push(`Customer Intent: ${call.customerIntent || '—'}`)
+      lines.push(`Urgency Level  : ${call.urgencyLevel || '—'}`)
+      lines.push(`Follow-up      : ${call.followUpRequired ? 'Yes' : 'No'}`)
+      if (call.transferredTo) {
+        lines.push(`Transferred To : ${call.transferredTo} (${call.transferReason || 'Manual'})`)
+      }
+      lines.push('')
+
+      if (call.summary) {
+        lines.push('── AI SUMMARY ─────────────────────────────────────')
+        lines.push(call.summary)
+        lines.push('')
+      }
+
+      if (call.topics && call.topics.length > 0) {
+        lines.push('── TOPICS DISCUSSED ────────────────────────────────')
+        call.topics.forEach((t: string) => lines.push(`  • ${t}`))
+        lines.push('')
+      }
+
+      if (call.decisions && call.decisions.length > 0) {
+        lines.push('── DECISIONS MADE ──────────────────────────────────')
+        call.decisions.forEach((d: string) => lines.push(`  ✓ ${d}`))
+        lines.push('')
+      }
+
+      if (call.actionItems && call.actionItems.length > 0) {
+        lines.push('── ACTION ITEMS ────────────────────────────────────')
+        call.actionItems.forEach((item: string, i: number) => lines.push(`  ${i + 1}. ${item}`))
+        lines.push('')
+      }
+
+      if (call.extractedData && Object.keys(call.extractedData).length > 0) {
+        lines.push('── EXTRACTED DATA ──────────────────────────────────')
+        Object.entries(call.extractedData).forEach(([k, v]) => lines.push(`  ${k}: ${v}`))
+        lines.push('')
+      }
+
+      if (call.transcript && Array.isArray(call.transcript) && call.transcript.length > 0) {
+        lines.push('── TRANSCRIPT ──────────────────────────────────────')
+        call.transcript.forEach((msg: any) => {
+          const role = (msg.role || 'unknown').toUpperCase().padEnd(9)
+          lines.push(`[${role}] ${msg.content}`)
+        })
+        lines.push('')
+      }
+
+      lines.push('═══════════════════════════════════════════════════')
+      lines.push(`Generated: ${new Date().toLocaleString()}`)
+
+      const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `call-report-${call._id || call.id}-${new Date(call.startTime).toISOString().slice(0, 10)}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to download report:', err)
+    }
+  }
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -345,14 +464,23 @@ export function CallDetailPanel({
               </div>
             )}
 
+            {/* Action Buttons */}
             <div className="flex gap-2 pt-2">
               <Button
+                id="export-json-btn"
                 variant="outline"
-                className="flex-1 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+                onClick={handleExportJSON}
+                className="flex-1 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl gap-2"
               >
+                <FileJson className="w-4 h-4" />
                 Export JSON
               </Button>
-              <Button className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl">
+              <Button
+                id="download-report-btn"
+                onClick={handleDownloadReport}
+                className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl gap-2"
+              >
+                <FileText className="w-4 h-4" />
                 Download Report
               </Button>
             </div>
