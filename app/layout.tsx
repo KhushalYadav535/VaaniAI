@@ -40,6 +40,9 @@ export const metadata: Metadata = {
     description: 'The most configurable Voice API to build and deploy conversational AI voice agents.',
     images: ['/logo.png'],
   },
+  verification: {
+    google: 'JGdgT3fzURu7XczaDb59KCabZ1_GeWnwIpnf9WbV8Ys',
+  },
   generator: 'v0.app',
   icons: {
     icon: [
