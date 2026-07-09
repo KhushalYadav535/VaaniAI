@@ -1,5 +1,5 @@
 /**
- * VaaniAI Frontend API Service
+ * Vocred Frontend API Service
  * Centralized HTTP client for backend communication
  */
 
@@ -339,7 +339,7 @@ export function createVoiceSession(
   ws.binaryType = 'arraybuffer';
 
   ws.onopen = () => {
-    console.log('[VaaniAI Voice] WebSocket connection success');
+    console.log('[Vocred Voice] WebSocket connection success');
 
     const initMessage = {
       type: 'init',
@@ -357,7 +357,7 @@ export function createVoiceSession(
     };
 
     ws.send(JSON.stringify(initMessage));
-    console.log('[VaaniAI Voice] init message sent');
+    console.log('[Vocred Voice] init message sent');
   };
 
   ws.addEventListener('message', (event) => {
@@ -366,7 +366,7 @@ export function createVoiceSession(
     try {
       const message = JSON.parse(event.data);
       if (message.type === 'ready') {
-        console.log('[VaaniAI Voice] ready message received');
+        console.log('[Vocred Voice] ready message received');
       }
     } catch {}
   });

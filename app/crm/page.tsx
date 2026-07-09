@@ -267,7 +267,7 @@ export default function CRMPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `vaaniai_${activeTab}_${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `vocred_${activeTab}_${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
     toast.success(`${activeTab === 'leads' ? 'Leads' : 'Tickets'} exported as CSV`)

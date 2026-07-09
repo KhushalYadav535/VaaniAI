@@ -322,14 +322,14 @@ export default function WebhooksPage() {
           <Card className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-sm">
             <CardHeader>
               <CardTitle className="text-slate-900 dark:text-slate-50">Webhook Documentation</CardTitle>
-              <CardDescription className="text-slate-600 dark:text-slate-400 font-light">Learn how to integrate with VaaniAI webhooks</CardDescription>
+              <CardDescription className="text-slate-600 dark:text-slate-400 font-light">Learn how to integrate with Vocred webhooks</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
                 <h3 className="text-lg font-medium text-slate-900 dark:text-slate-50 mb-3">Authentication</h3>
                 <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 rounded-xl">
                   <p className="text-sm text-slate-600 dark:text-slate-300 mb-2 font-light">All webhook requests include a signature header for verification:</p>
-                  <code className="block p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-700 dark:text-slate-300 font-mono font-light">X-VaaniAI-Signature: sha256=hash_of_payload</code>
+                  <code className="block p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-sm text-slate-700 dark:text-slate-300 font-mono font-light">X-Vocred-Signature: sha256=hash_of_payload</code>
                 </div>
               </div>
               <div>

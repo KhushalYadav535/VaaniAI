@@ -299,7 +299,7 @@ export default function WidgetView() {
     setStatus('ended')
     // Notify parent iframe
     if (isEmbed && window.parent !== window) {
-      window.parent.postMessage({ type: 'vaani-call-ended' }, '*')
+      window.parent.postMessage({ type: 'vocred-call-ended' }, '*')
     }
   }
 
@@ -448,7 +448,7 @@ export default function WidgetView() {
 
       {/* Powered by */}
       <div className="py-2 text-center">
-        <p className="text-[10px] text-slate-300">Powered by VaaniAI</p>
+        <p className="text-[10px] text-slate-300">Powered by Vocred</p>
       </div>
     </div>
   )

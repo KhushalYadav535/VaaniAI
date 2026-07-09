@@ -68,6 +68,34 @@ export default function EditAgentPage() {
 
   const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5000'
 
+  const optimizePrompt = async () => {
+    setOptimizingPrompt(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${BACKEND_URL}/api/optimize-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          currentPrompt: prompt,
+          agentName,
+          language: selectedLangs[0] || 'hi',
+          role: agentName,
+        }),
+      })
+      const data = await res.json()
+      if (data.success && data.optimizedPrompt) {
+        setPrompt(data.optimizedPrompt)
+        toast.success('✨ Prompt optimized successfully!')
+      } else {
+        toast.error(data.message || 'Optimization failed')
+      }
+    } catch (e: any) {
+      toast.error('Could not reach optimizer: ' + e.message)
+    } finally {
+      setOptimizingPrompt(false)
+    }
+  }
+
   // ── Tab ──
   const [tab, setTab] = useState<'agent' | 'postcall'>('agent')
 
@@ -77,6 +105,7 @@ export default function EditAgentPage() {
   const [error, setError]       = useState('')
   const [copied, setCopied]     = useState(false)
   const [agent, setAgent]       = useState<any>(null)
+  const [optimizingPrompt, setOptimizingPrompt] = useState(false)
 
   // ── Agent tab fields ──
   const [agentName, setAgentName]     = useState('')
@@ -399,8 +428,14 @@ export default function EditAgentPage() {
                     <button className="flex items-center gap-1.5 text-xs text-cyan-600 dark:text-[#00d4c8] hover:opacity-80 border border-cyan-300 dark:border-[#00d4c8]/30 hover:border-cyan-500 dark:hover:border-[#00d4c8]/60 px-2.5 py-1 rounded-md transition-colors">
                       <Plus size={11} /> Insert Contact Fields <ChevronDown size={11} />
                     </button>
-                    <button className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 hover:opacity-80 border border-purple-300 dark:border-purple-400/30 hover:border-purple-500 dark:hover:border-purple-400/60 px-2.5 py-1 rounded-md transition-colors">
-                      <Wand2 size={11} /> Optimize prompt
+                    <button
+                      onClick={optimizePrompt}
+                      disabled={optimizingPrompt}
+                      className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 hover:opacity-80 border border-purple-300 dark:border-purple-400/30 hover:border-purple-500 dark:hover:border-purple-400/60 px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {optimizingPrompt
+                        ? <><Loader2 size={11} className="animate-spin" /> Optimizing...</>
+                        : <><Wand2 size={11} /> Optimize prompt</>}
                     </button>
                   </div>
                 </div>

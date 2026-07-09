@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
+import Script from 'next/script'
 import {
   ArrowRight, Mic, Zap, Phone, BarChart3, Shield, Play, Globe, Cpu,
   Waves, Bot, ChevronRight, Star, Sparkles, Headphones, Activity, Lock,
@@ -154,6 +156,16 @@ export default function LandingPage() {
   const [activeTab, setActiveTab] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Vocred Voice AI Platform',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Any',
+    description: 'Build and deploy conversational AI voice agents and automate outbound sales calls. The most configurable Voice API for developers.',
+    url: 'https://vocred.com',
+  }
+
   // Always call all hooks unconditionally — before any early return
   const { scrollYProgress } = useScroll(
     mounted ? { target: heroRef, offset: ['start start', 'end start'] } : {}
@@ -187,7 +199,7 @@ export default function LandingPage() {
 
   const tabs = [
     { label: 'Voice Agent', icon: Headphones, color: '#a78bfa', lines: [
-      { w: 'AI', t: "Hi, I'm Vaani. How can I help you today?" },
+      { w: 'AI', t: "Hi, I'm Vocred. How can I help you today?" },
       { w: 'U', t: 'I need to reschedule my appointment to Friday.' },
       { w: 'AI', t: "Done! I've moved your booking to Friday 3 PM. You'll get a confirmation SMS shortly." },
     ]},
@@ -228,6 +240,7 @@ export default function LandingPage() {
       className="min-h-screen bg-[#030305] text-white overflow-x-hidden selection:bg-[#a78bfa]/30"
       style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
     >
+      <Script id="schema-org" type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <LensFlare />
 
       {/* ── Cinematic Ambient Canvas ── */}
@@ -255,15 +268,7 @@ export default function LandingPage() {
         <div className="max-w-[1280px] mx-auto px-6">
           <div className="h-[72px] flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3 group">
-              <div className="relative">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#a78bfa] via-[#7c3aed] to-[#60a5fa] flex items-center justify-center shadow-[0_0_25px_rgba(167,139,250,0.4)] group-hover:shadow-[0_0_40px_rgba(167,139,250,0.6)] transition-shadow duration-700">
-                  <Mic className="w-4 h-4 text-white" />
-                </div>
-                <div className="absolute -inset-1 rounded-xl bg-gradient-to-br from-[#a78bfa] to-[#60a5fa] opacity-0 group-hover:opacity-25 blur-lg transition-opacity duration-700" />
-              </div>
-              <span className="text-[18px] font-bold tracking-tight bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
-                Vaani<span className="text-[#a78bfa]">AI</span>
-              </span>
+              <Image src="/logo.png" alt="Vocred Logo" width={150} height={50} className="h-10 w-auto object-contain" />
             </Link>
             <div className="hidden md:flex items-center gap-1">
               {['Product', 'Developers', 'Pricing', 'Company'].map(l => (
@@ -338,7 +343,7 @@ export default function LandingPage() {
               <span className="flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-[#a78bfa]/20 to-[#60a5fa]/20 text-[#a78bfa] text-[12px] font-semibold">
                 <Sparkles className="w-3 h-3" /> NEW
               </span>
-              <span className="tracking-wide">Vaani Engine 2.0 — Sub-400ms Full-Duplex Voice</span>
+              <span className="tracking-wide">Vocred Engine 2.0 — Sub-400ms Full-Duplex Voice</span>
               <ChevronRight className="w-3.5 h-3.5 text-white/20 group-hover:text-white/50 group-hover:translate-x-0.5 transition-all" />
             </motion.div>
           </motion.div>
@@ -600,7 +605,7 @@ export default function LandingPage() {
               </div>
               <div className="mx-auto flex items-center gap-2 px-4 py-1 rounded-lg bg-white/[0.02] border border-white/[0.04] backdrop-blur-xl">
                 <Lock className="w-3 h-3 text-white/20" />
-                <span className="text-[12px] text-white/20 font-medium tracking-wide">app.vaaniai.com</span>
+                <span className="text-[12px] text-white/20 font-medium tracking-wide">app.vocred.com</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2 w-2">
@@ -1053,7 +1058,7 @@ export default function LandingPage() {
               <span className="bg-gradient-to-r from-[#c084fc] to-[#60a5fa] bg-clip-text text-transparent">Open source pricing.</span>
             </h2>
             <p className="text-[16px] text-white/25 font-light max-w-[500px] mx-auto">
-              Every feature that costs $3,000+/mo elsewhere is free on VaaniAI. Forever.
+              Every feature that costs $3,000+/mo elsewhere is free on Vocred. Forever.
             </p>
           </motion.div>
 
@@ -1139,7 +1144,7 @@ export default function LandingPage() {
           </motion.div>
           <div className="grid md:grid-cols-3 gap-5">
             {[
-              { quote: 'We replaced our entire inbound support team with VaaniAI agents. Response time went from hours to seconds.', name: 'Rahul S.', role: 'CTO, TechStartup', gradient: 'from-[#a78bfa] to-[#60a5fa]' },
+              { quote: 'We replaced our entire inbound support team with Vocred agents. Response time went from hours to seconds.', name: 'Rahul S.', role: 'CTO, TechStartup', gradient: 'from-[#a78bfa] to-[#60a5fa]' },
               { quote: 'The Hindi + English multilingual support is incredible. Our Hindi-speaking customers finally feel heard.', name: 'Priya M.', role: 'Product Lead, FinTech', gradient: 'from-[#60a5fa] to-[#22d3ee]' },
               { quote: 'Webhook integration means every call auto-populates our CRM. Zero manual data entry. Absolutely incredible.', name: 'Amit K.', role: 'Ops Manager, D2C Brand', gradient: 'from-[#f472b6] to-[#a78bfa]' },
             ].map((t, i) => (
@@ -1245,14 +1250,9 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-12 mb-16">
             <div>
               <Link href="/" className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#a78bfa] to-[#60a5fa] flex items-center justify-center shadow-[0_0_15px_rgba(167,139,250,0.2)]">
-                  <Mic className="w-3.5 h-3.5 text-white" />
-                </div>
-                <span className="text-[16px] font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
-                  Vaani<span className="text-[#a78bfa]">AI</span>
-                </span>
+                <Image src="/logo.png" alt="Vocred Logo" width={150} height={50} className="h-10 w-auto object-contain" />
               </Link>
-              <p className="text-[13px] text-white/20 leading-relaxed font-light">The open-source voice AI platform. Enterprise features, zero cost.</p>
+              <p className="text-[13px] text-white/20 leading-relaxed font-light">The open-source enterprise voice AI platform. Build conversational AI agents with our Voice API to automate inbound support and outbound sales.</p>
             </div>
             {[
               { title: 'Product', links: ['Features', 'Pricing', 'Changelog', 'Roadmap'] },
@@ -1272,7 +1272,7 @@ export default function LandingPage() {
             ))}
           </div>
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-8 border-t border-white/[0.04]">
-            <p className="text-[12px] text-white/12 font-light">&copy; 2026 VaaniAI. All rights reserved.</p>
+            <p className="text-[12px] text-white/12 font-light">&copy; 2026 Vocred. All rights reserved.</p>
             <div className="flex gap-6 text-[12px] text-white/12">
               {['Privacy', 'Terms', 'Cookies'].map(l => (
                 <a key={l} href="#" className="hover:text-white/30 transition-colors">{l}</a>

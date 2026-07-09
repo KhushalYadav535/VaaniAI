@@ -105,7 +105,7 @@ export default function SuperAdminPage() {
             </div>
             <div>
               <h1 className="text-base font-semibold text-white">Super Admin Console</h1>
-              <p className="text-xs text-slate-500">{users.length} registered users &middot; VaaniAI Platform</p>
+              <p className="text-xs text-slate-500">{users.length} registered users &middot; Vocred Platform</p>
             </div>
           </div>
           <button onClick={fetchAll} className="flex items-center gap-2 text-xs text-slate-400 hover:text-white px-3 py-2 rounded-xl border border-white/5 hover:border-white/10 transition-all">

@@ -69,6 +69,7 @@ export function CreateAgentModal({ open, onClose, onSubmit }: CreateAgentModalPr
   const [knowledgeBaseIds, setKnowledgeBaseIds] = useState<string[]>([])
   const [kbOpen, setKbOpen]                 = useState(false)
   const [kbs, setKbs] = useState<any[]>([])
+  const [optimizingPrompt, setOptimizingPrompt] = useState(false)
 
   useEffect(() => {
     knowledgeBaseApi.getAll().then(res => setKbs(res.data)).catch(console.error)
@@ -87,6 +88,35 @@ export function CreateAgentModal({ open, onClose, onSubmit }: CreateAgentModalPr
 
   const langRef = useRef<HTMLDivElement>(null)
   const kbRef = useRef<HTMLDivElement>(null)
+
+  const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '')
+
+  const optimizePrompt = async () => {
+    setOptimizingPrompt(true)
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+      const res = await fetch(`${BACKEND_URL}/api/optimize-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          currentPrompt: prompt,
+          agentName: agentName || 'Assistant',
+          language: selectedLangs[0] || 'hi',
+          role: agentName,
+        }),
+      })
+      const data = await res.json()
+      if (data.success && data.optimizedPrompt) {
+        setPrompt(data.optimizedPrompt)
+      } else {
+        alert(data.message || 'Optimization failed. Try again.')
+      }
+    } catch (e: any) {
+      alert('Could not reach optimizer: ' + e.message)
+    } finally {
+      setOptimizingPrompt(false)
+    }
+  }
 
   if (!open) return null
 
@@ -241,8 +271,14 @@ export function CreateAgentModal({ open, onClose, onSubmit }: CreateAgentModalPr
                       <button className="flex items-center gap-1.5 text-xs text-[#00d4c8] hover:text-[#00bfb4] border border-[#00d4c8]/30 hover:border-[#00d4c8]/60 px-2.5 py-1 rounded-md transition-colors">
                         <Plus size={11} /> Insert Contact Fields <ChevronDown size={11} />
                       </button>
-                      <button className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 border border-purple-400/30 hover:border-purple-400/60 px-2.5 py-1 rounded-md transition-colors">
-                        <Wand2 size={11} /> Optimize prompt
+                      <button
+                        onClick={optimizePrompt}
+                        disabled={optimizingPrompt}
+                        className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 border border-purple-400/30 hover:border-purple-400/60 px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {optimizingPrompt
+                          ? <><Loader2 size={11} className="animate-spin" /> Optimizing...</>
+                          : <><Wand2 size={11} /> Optimize prompt</>}
                       </button>
                     </div>
                   </div>

@@ -36,9 +36,9 @@ export default function WebWidgetPage() {
     if (agent) setSelectedAgentName(agent.name)
   }
 
-  const embedCode = `<!-- VaaniAI Voice Widget -->
+  const embedCode = `<!-- Vocred Voice Widget -->
 <script>
-  window.vaaniConfig = {
+  window.vocredConfig = {
     agentId: "${selectedAgent || 'YOUR_AGENT_ID'}",
     color: "${color}",
     text: "${buttonText}",

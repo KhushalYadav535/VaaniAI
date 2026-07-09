@@ -221,10 +221,10 @@ const METHOD_COLORS: Record<string, string> = {
 }
 
 const SDK_LANGUAGES = [
-  { lang: 'curl', label: 'cURL', code: `curl -X GET "https://api.vaaniai.ai/v1/agents" \\
+  { lang: 'curl', label: 'cURL', code: `curl -X GET "https://api.vocred.ai/v1/agents" \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json"` },
-  { lang: 'javascript', label: 'JavaScript', code: `const response = await fetch('https://api.vaaniai.ai/v1/agents', {
+  { lang: 'javascript', label: 'JavaScript', code: `const response = await fetch('https://api.vocred.ai/v1/agents', {
   headers: {
     'Authorization': \`Bearer \${apiKey}\`,
     'Content-Type': 'application/json'
@@ -238,7 +238,7 @@ headers = {
     "Content-Type": "application/json"
 }
 response = requests.get(
-    "https://api.vaaniai.ai/v1/agents",
+    "https://api.vocred.ai/v1/agents",
     headers=headers
 )
 data = response.json()` },
@@ -318,7 +318,7 @@ export default function DocsPage() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-thin text-slate-900 dark:text-white">API Reference & SDK</h1>
-                  <p className="text-sm text-slate-500 font-light">Complete REST API & WebSocket documentation for VaaniAI</p>
+                  <p className="text-sm text-slate-500 font-light">Complete REST API & WebSocket documentation for Vocred</p>
                 </div>
               </div>
               {/* Search */}
@@ -470,9 +470,9 @@ export default function DocsPage() {
                               <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">cURL Example</h4>
                               <div className="relative">
                                 <pre className="bg-slate-950 dark:bg-slate-950 rounded-xl p-3 text-[10px] font-mono text-slate-300 overflow-x-auto">
-                                  <code>{`curl -X ${ep.method} "https://api.vaaniai.ai${ep.path}" \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json"${ep.body ? ` \\\n  -d '${ep.body.replace(/\n/g, '\\n')}'` : ''}`}</code>
+                                  <code>{`curl -X ${ep.method} "https://api.vocred.ai${ep.path}" \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json"${ep.body ? ` \\\n  -d '${ep.body.replace(/\n/g, '\\n')}'` : ''}`}</code>
                                 </pre>
-                                <button onClick={() => copyCode(`${epKey}-curl`, `curl -X ${ep.method} "https://api.vaaniai.ai${ep.path}" -H "Authorization: Bearer YOUR_API_KEY" -H "Content-Type: application/json"`)}
+                                <button onClick={() => copyCode(`${epKey}-curl`, `curl -X ${ep.method} "https://api.vocred.ai${ep.path}" -H "Authorization: Bearer YOUR_API_KEY" -H "Content-Type: application/json"`)}
                                   className="absolute top-2 right-2 p-1 rounded bg-white/10 hover:bg-white/20 text-white/60 hover:text-white/80">
                                   {copiedMap[`${epKey}-curl`] ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                                 </button>
@@ -496,7 +496,7 @@ export default function DocsPage() {
               </div>
               <h2 className="text-lg font-thin text-slate-900 dark:text-white">WebSocket Events</h2>
             </div>
-            <p className="text-sm text-slate-500 font-light mb-4">Events sent between the client and server during a voice session over <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs font-mono">wss://api.vaaniai.ai/ws/voice</code></p>
+            <p className="text-sm text-slate-500 font-light mb-4">Events sent between the client and server during a voice session over <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs font-mono">wss://api.vocred.ai/ws/voice</code></p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
@@ -626,21 +626,21 @@ export default function DocsPage() {
               </div>
               <h2 className="text-lg font-thin text-slate-900 dark:text-white">Client SDK (npm)</h2>
             </div>
-            <p className="text-sm text-slate-500 font-light mb-4">Install the official VaaniAI SDK for programmatic access to all API endpoints.</p>
+            <p className="text-sm text-slate-500 font-light mb-4">Install the official Vocred SDK for programmatic access to all API endpoints.</p>
             <div className="bg-slate-950 rounded-2xl p-4 mb-4">
-              <code className="text-sm font-mono text-slate-300">npm install vaaniai-sdk</code>
+              <code className="text-sm font-mono text-slate-300">npm install vocred-sdk</code>
             </div>
             <div className="relative">
               <pre className="bg-slate-950 rounded-2xl p-4 text-xs font-mono text-slate-300 overflow-x-auto leading-relaxed">
-{`import { VaaniAI } from 'vaaniai-sdk'
+{`import { Vocred } from 'vocred-sdk'
 
-const vaani = new VaaniAI({ apiKey: 'YOUR_API_KEY' })
+const vocred = new Vocred({ apiKey: 'YOUR_API_KEY' })
 
 // List agents
-const agents = await vaani.agents.list()
+const agents = await vocred.agents.list()
 
 // Create agent
-const agent = await vaani.agents.create({
+const agent = await vocred.agents.create({
   name: 'Support Bot',
   systemPrompt: 'You are a helpful agent...',
   voiceProvider: 'edge-tts',
@@ -648,12 +648,12 @@ const agent = await vaani.agents.create({
 })
 
 // Start a voice call
-const call = await vaani.calls.create({
+const call = await vocred.calls.create({
   to: '+919999999999',
   agentId: agent.id,
 })`}
               </pre>
-              <button onClick={() => copyCode('sdk-example', `import { VaaniAI } from 'vaaniai-sdk'\n\nconst vaani = new VaaniAI({ apiKey: 'YOUR_API_KEY' })\nconst agents = await vaani.agents.list()`)}
+              <button onClick={() => copyCode('sdk-example', `import { Vocred } from 'vocred-sdk'\n\nconst vocred = new Vocred({ apiKey: 'YOUR_API_KEY' })\nconst agents = await vocred.agents.list()`)}
                 className="absolute top-3 right-3 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/60 hover:text-white/80 transition-all">
                 {copiedMap['sdk-example'] ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
               </button>

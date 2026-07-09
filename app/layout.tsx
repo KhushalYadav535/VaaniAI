@@ -11,8 +11,35 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'VaaniAI Platform',
-  description: 'The most configurable API to build voice AI agents.',
+  title: 'Vocred - Enterprise Voice AI Platform & AI Voice Agents',
+  description: 'The most configurable Voice API to build and deploy conversational AI voice agents. Automate inbound support and outbound sales calls with Vocred.',
+  keywords: ['Voice AI Platform', 'AI Voice Agents', 'Conversational AI', 'Voice API', 'AI Outbound Calling Bot', 'Automated IVR Replacement', 'Voice AI API', 'Voice AI Solutions'],
+  metadataBase: new URL('https://vocred.com'),
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://vocred.com',
+    title: 'Vocred - Enterprise Voice AI Platform',
+    description: 'The most configurable Voice API to build and deploy conversational AI voice agents.',
+    siteName: 'Vocred',
+    images: [
+      {
+        url: '/logo.png',
+        width: 1200,
+        height: 630,
+        alt: 'Vocred Voice AI Platform',
+      }
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Vocred - Enterprise Voice AI Platform',
+    description: 'The most configurable Voice API to build and deploy conversational AI voice agents.',
+    images: ['/logo.png'],
+  },
   generator: 'v0.app',
   icons: {
     icon: [

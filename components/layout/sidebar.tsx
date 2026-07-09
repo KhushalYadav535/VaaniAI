@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
   LayoutDashboard, 
@@ -87,10 +88,7 @@ export function Sidebar() {
       >
         {/* Logo area */}
         <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-100 dark:border-slate-800">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 via-purple-600 to-pink-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
-            <Zap size={16} className="text-white" />
-          </div>
-          <span className="font-thin text-lg text-slate-900 dark:text-white tracking-wide">Vaani<span className="font-extralight bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">AI</span></span>
+          <Image src="/logo.png" alt="Vocred Logo" width={150} height={50} className="h-10 w-auto object-contain" />
         </div>
 
         {/* Navigation */}

@@ -71,9 +71,9 @@ const CATEGORIES = [
 ]
 
 const WEBHOOK_TEMPLATES = [
-  { name: 'New Lead in Salesforce', webhookUrl: 'https://your-instance.salesforce.com/services/apexrest/vaaniai/lead', samplePayload: true },
+  { name: 'New Lead in Salesforce', webhookUrl: 'https://your-instance.salesforce.com/services/apexrest/vocred/lead', samplePayload: true },
   { name: 'Slack Notification', webhookUrl: 'https://hooks.slack.com/services/T00/B00/xxxxx', samplePayload: true },
-  { name: 'n8n Workflow Trigger', webhookUrl: 'https://your-n8n.com/webhook/vaaniai-call', samplePayload: true },
+  { name: 'n8n Workflow Trigger', webhookUrl: 'https://your-n8n.com/webhook/vocred-call', samplePayload: true },
   { name: 'Zapier Webhook', webhookUrl: 'https://hooks.zapier.com/hooks/catch/xxxxx/xxxxx/', samplePayload: true },
   { name: 'HubSpot Contact Sync', webhookUrl: 'https://api.hubapi.com/crm/v3/objects/contacts', samplePayload: true },
   { name: 'Create Zendesk Ticket', webhookUrl: 'https://your-subdomain.zendesk.com/api/v2/tickets.json', samplePayload: true },
@@ -355,7 +355,7 @@ export default function IntegrationsPage() {
                 <div>
                   <label className="text-xs font-medium text-slate-500 mb-1 block">Webhook URL</label>
                   <Input placeholder="https://your-server.com/webhook" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} className="text-sm" />
-                  <p className="text-[10px] text-slate-400 mt-1">VaaniAI will POST call events to this URL</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Vocred will POST call events to this URL</p>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-500 mb-1 block">Choose Events</label>

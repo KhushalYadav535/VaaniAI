@@ -1,8 +1,8 @@
-# VaaniAI Frontend Analysis
+# Vocred Frontend Analysis
 
 ## What This Project Is
 
-VaaniAI is a Next.js frontend for a voice-AI platform. The app is built around a few core user journeys:
+Vocred is a Next.js frontend for a voice-AI platform. The app is built around a few core user journeys:
 
 - Authenticate and enter the platform
 - Create and manage AI agents
@@ -28,7 +28,7 @@ The app is wrapped in `ThemeProvider` and `AuthProvider`, then rendered through 
 
 ## Root Flow
 
-The root layout is in [`app/layout.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/layout.tsx). It:
+The root layout is in [`app/layout.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/layout.tsx). It:
 
 - Loads the global CSS
 - Mounts the theme provider
@@ -81,7 +81,7 @@ The auth experience is mostly client-side. The frontend stores `token` and `user
 
 ## Authentication Flow
 
-Auth lives in [`components/providers/auth-provider.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/components/providers/auth-provider.tsx).
+Auth lives in [`components/providers/auth-provider.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/components/providers/auth-provider.tsx).
 
 What it does:
 
@@ -99,7 +99,7 @@ Login and registration pages both call the backend directly and then store the r
 
 ## Route Shell And Protection
 
-[`components/layout/app-shell.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/components/layout/app-shell.tsx) decides whether to show the public pages or the authenticated app chrome.
+[`components/layout/app-shell.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/components/layout/app-shell.tsx) decides whether to show the public pages or the authenticated app chrome.
 
 Behavior:
 
@@ -111,7 +111,7 @@ This is a client-side gate. It improves UX, but the backend still needs to enfor
 
 ## Theme System
 
-Theme handling is in [`components/providers/theme-provider.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/components/providers/theme-provider.tsx).
+Theme handling is in [`components/providers/theme-provider.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/components/providers/theme-provider.tsx).
 
 Flow:
 
@@ -124,7 +124,7 @@ The app uses a polished purple/cyan visual language in most screens, while `app/
 
 ## Backend Integration Pattern
 
-The central API client is [`lib/api.ts`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/lib/api.ts).
+The central API client is [`lib/api.ts`](/R:/Projects/datatrack projects/vocred frontend/Vocred/lib/api.ts).
 
 Key behavior:
 
@@ -167,7 +167,7 @@ The frontend assumes the backend provides:
 
 ### Dashboard
 
-[`app/dashboard/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/dashboard/page.tsx) combines:
+[`app/dashboard/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/dashboard/page.tsx) combines:
 
 - Greeting hero
 - Stats cards
@@ -181,11 +181,11 @@ It is the main “home” screen after login.
 
 The agent system is centered around:
 
-- [`app/agents/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/agents/page.tsx)
-- [`app/agents/new/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/agents/new/page.tsx)
-- [`app/agents/[id]/edit/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/agents/[id]/edit/page.tsx)
-- [`components/agents/agent-form.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/components/agents/agent-form.tsx)
-- [`lib/agentTemplates.ts`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/lib/agentTemplates.ts)
+- [`app/agents/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/agents/page.tsx)
+- [`app/agents/new/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/agents/new/page.tsx)
+- [`app/agents/[id]/edit/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/agents/[id]/edit/page.tsx)
+- [`components/agents/agent-form.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/components/agents/agent-form.tsx)
+- [`lib/agentTemplates.ts`](/R:/Projects/datatrack projects/vocred frontend/Vocred/lib/agentTemplates.ts)
 
 What an agent contains:
 
@@ -242,7 +242,7 @@ Node types in the advanced editor include:
 
 ### Voice Testing
 
-[`app/test-agent/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/test-agent/page.tsx) is the most important realtime flow in the app.
+[`app/test-agent/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/test-agent/page.tsx) is the most important realtime flow in the app.
 
 Flow:
 
@@ -253,7 +253,7 @@ Flow:
 - UI renders transcript, call status, timers, and sentiment history
 - User can also type messages or run a scripted simulation
 
-[`app/widget/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/widget/page.tsx) and [`app/web-widget/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/web-widget/page.tsx) expose the same experience in embeddable form.
+[`app/widget/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/widget/page.tsx) and [`app/web-widget/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/web-widget/page.tsx) expose the same experience in embeddable form.
 
 ### Analytics, Logs, and Usage
 
@@ -280,7 +280,7 @@ The log detail panel is especially rich:
 
 ### Numbers And Telephony
 
-[`app/numbers/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/numbers/page.tsx) plus the buy modal and table manage phone numbers.
+[`app/numbers/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/numbers/page.tsx) plus the buy modal and table manage phone numbers.
 
 The flow is:
 
@@ -291,7 +291,7 @@ The flow is:
 - Optionally assign it to an agent
 - Delete or reassign later
 
-[`app/voice-settings/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/voice-settings/page.tsx) lets users:
+[`app/voice-settings/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/voice-settings/page.tsx) lets users:
 
 - Preview TTS voices
 - Change speed
@@ -343,7 +343,7 @@ The web widget flow is:
 
 ### Super Admin
 
-[`app/super-admin/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/super-admin/page.tsx) is a separate console for platform operators.
+[`app/super-admin/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/super-admin/page.tsx) is a separate console for platform operators.
 
 It provides:
 
@@ -372,16 +372,16 @@ Access is limited to users with `role === 'super_admin'`.
 
 If you want to understand the app fastest, read these files in this order:
 
-1. [`app/layout.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/layout.tsx)
-2. [`components/providers/auth-provider.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/components/providers/auth-provider.tsx)
-3. [`components/layout/app-shell.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/components/layout/app-shell.tsx)
-4. [`lib/api.ts`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/lib/api.ts)
-5. [`app/dashboard/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/dashboard/page.tsx)
-6. [`components/agents/agent-form.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/components/agents/agent-form.tsx)
-7. [`app/test-agent/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/test-agent/page.tsx)
-8. [`app/call-flows/[id]/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/call-flows/[id]/page.tsx)
-9. [`app/settings/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/settings/page.tsx)
-10. [`app/webhooks/page.tsx`](/R:/Projects/datatrack projects/vaaniai frontend/VaaniAI/app/webhooks/page.tsx)
+1. [`app/layout.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/layout.tsx)
+2. [`components/providers/auth-provider.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/components/providers/auth-provider.tsx)
+3. [`components/layout/app-shell.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/components/layout/app-shell.tsx)
+4. [`lib/api.ts`](/R:/Projects/datatrack projects/vocred frontend/Vocred/lib/api.ts)
+5. [`app/dashboard/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/dashboard/page.tsx)
+6. [`components/agents/agent-form.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/components/agents/agent-form.tsx)
+7. [`app/test-agent/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/test-agent/page.tsx)
+8. [`app/call-flows/[id]/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/call-flows/[id]/page.tsx)
+9. [`app/settings/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/settings/page.tsx)
+10. [`app/webhooks/page.tsx`](/R:/Projects/datatrack projects/vocred frontend/Vocred/app/webhooks/page.tsx)
 
 ## Summary
 

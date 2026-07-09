@@ -1,5 +1,5 @@
 /**
- * VaaniAI Web Widget
+ * Vocred Web Widget
  * Include this script on any webpage to add an AI voice agent floating button.
  */
 
@@ -12,7 +12,7 @@
   }
 
   function initWidget() {
-    const config = window.vaaniConfig || {
+    const config = window.vocredConfig || {
       agentId: 'YOUR_AGENT_ID',
       color: '#8b5cf6',
       text: 'Talk to AI Support',
@@ -21,7 +21,7 @@
 
     // Create a container for the widget
     const container = document.createElement('div');
-    container.id = 'vaaniai-widget-container';
+    container.id = 'vocred-widget-container';
     container.style.position = 'fixed';
     container.style.zIndex = '999999';
     
@@ -33,7 +33,7 @@
       container.style.right = '20px';
     }
 
-    // Determine base URL dynamically (assuming this script is loaded from the VaaniAI host)
+    // Determine base URL dynamically (assuming this script is loaded from the Vocred host)
     // fallback to localhost if cannot determine
     const scriptTag = document.currentScript;
     let baseUrl = 'http://localhost:3000';

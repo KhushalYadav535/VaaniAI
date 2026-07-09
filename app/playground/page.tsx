@@ -20,7 +20,7 @@ interface Message {
 
 export default function PlaygroundPage() {
   const [systemPrompt, setSystemPrompt] = useState(
-    'You are a helpful customer support agent for VaaniAI. Be friendly, concise, and professional.'
+    'You are a helpful customer support agent for Vocred. Be friendly, concise, and professional.'
   )
   const [userMessage, setUserMessage] = useState('')
   const [messages, setMessages] = useState<Message[]>([])

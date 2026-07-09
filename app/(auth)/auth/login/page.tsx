@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,12 +57,7 @@ export default function LoginPage() {
       <nav className="fixed top-0 w-full bg-white/70 dark:bg-slate-950/70 backdrop-blur-2xl border-b border-slate-200/50 dark:border-slate-800/50 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 via-purple-600 to-pink-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
-              <Phone className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg font-thin tracking-wide text-slate-900 dark:text-white">
-              Vaani<span className="font-extralight bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">AI</span>
-            </span>
+            <Image src="/logo.png" alt="Vocred Logo" width={150} height={50} className="h-10 w-auto object-contain" />
           </Link>
           <ThemeToggle />
         </div>
@@ -79,7 +75,7 @@ export default function LoginPage() {
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-violet-600/10 to-pink-600/10 border border-purple-200/50 dark:border-purple-800/50 mb-4">
                   <Sparkles className="w-4 h-4 text-purple-600" />
-                  <span className="text-xs font-light text-purple-700 dark:text-purple-300">VaaniAI Platform</span>
+                  <span className="text-xs font-light text-purple-700 dark:text-purple-300">Vocred Platform</span>
                 </div>
                 <h1 className="text-3xl font-thin text-slate-900 dark:text-white mb-2">Welcome back</h1>
                 <p className="text-slate-500 dark:text-slate-400 font-light">Sign in to your voice AI dashboard</p>

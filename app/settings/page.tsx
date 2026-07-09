@@ -150,7 +150,7 @@ export default function SettingsPage() {
       }
       const res = await fetch(settings.postCallWebhookUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'User-Agent': 'VaaniAI-Webhook/1.0' },
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'Vocred-Webhook/1.0' },
         body: JSON.stringify(samplePayload),
         signal: AbortSignal.timeout(8000),
       })
@@ -375,7 +375,7 @@ export default function SettingsPage() {
               {/* Info Banner */}
               <div className="p-4 rounded-2xl bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border border-violet-200/50 dark:border-violet-800/50">
                 <p className="text-sm font-light text-violet-700 dark:text-violet-300">
-                  🔗 <strong>Post-Call Webhook</strong> — After every call ends, VaaniAI automatically sends the full call data (transcript, summary, leads, sentiment, extracted info) to your URL.
+                  🔗 <strong>Post-Call Webhook</strong> — After every call ends, Vocred automatically sends the full call data (transcript, summary, leads, sentiment, extracted info) to your URL.
                   Connect to <strong>n8n</strong>, <strong>Zapier</strong>, <strong>Make.com</strong>, or your own backend.
                 </p>
               </div>
@@ -388,7 +388,7 @@ export default function SettingsPage() {
                     <Webhook className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <Input
                       type="url"
-                      placeholder="https://your-n8n.com/webhook/vaaniai-calls"
+                      placeholder="https://your-n8n.com/webhook/vocred-calls"
                       value={settings.postCallWebhookUrl}
                       onChange={e => update('postCallWebhookUrl' as any, e.target.value)}
                       className="pl-10 h-10 bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 rounded-2xl font-light text-sm"
@@ -409,7 +409,7 @@ export default function SettingsPage() {
                 </div>
                 {webhookTestResult === 'ok' && <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1"><Check className="w-3 h-3" /> Webhook reachable! Sample payload sent.</p>}
                 {webhookTestResult === 'fail' && <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1"><X className="w-3 h-3" /> Could not reach URL. Check if n8n is running and the URL is correct.</p>}
-                <p className="text-xs font-light text-slate-500">VaaniAI will POST to this URL after every call. The Test button sends a sample payload.</p>
+                <p className="text-xs font-light text-slate-500">Vocred will POST to this URL after every call. The Test button sends a sample payload.</p>
               </div>
 
               {/* Webhook Secret */}
@@ -429,7 +429,7 @@ export default function SettingsPage() {
                     {showKeys['webhookSecret'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-xs font-light text-slate-500">If set, every request will include a <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">X-VaaniAI-Signature</code> HMAC-SHA256 header for verification in n8n.</p>
+                <p className="text-xs font-light text-slate-500">If set, every request will include a <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">X-Vocred-Signature</code> HMAC-SHA256 header for verification in n8n.</p>
               </div>
 
               {/* Sample Payload Preview */}

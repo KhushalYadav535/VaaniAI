@@ -25,10 +25,10 @@ const VOICES = [
 
 const PREVIEW_TEXTS: Record<string, string> = {
   'hi-IN-SwaraNeural': 'नमस्ते! मैं आपकी AI असिस्टेंट हूं। आज मैं आपकी कैसे मदद कर सकती हूं?',
-  'hi-IN-MadhurNeural': 'नमस्ते! मैं VaaniAI का AI असिस्टेंट हूं। मुझसे कोई भी सवाल पूछें।',
+  'hi-IN-MadhurNeural': 'नमस्ते! मैं Vocred का AI असिस्टेंट हूं। मुझसे कोई भी सवाल पूछें।',
   'es-ES-ElviraNeural': 'Hola! Soy tu asistente de inteligencia artificial. ¿En qué puedo ayudarte hoy?',
 }
-const DEFAULT_PREVIEW = "Hello! I'm your AI assistant powered by VaaniAI. How can I help you today?"
+const DEFAULT_PREVIEW = "Hello! I'm your AI assistant powered by Vocred. How can I help you today?"
 
 export default function VoiceSettingsPage() {
   const [selectedVoice, setSelectedVoice] = useState('en-US-JennyNeural')
