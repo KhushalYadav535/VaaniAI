@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Navbar } from './navbar'
 import { Sidebar } from './sidebar'
 
-const AUTH_PAGES = ['/auth/login', '/auth/register', '/'];
+const AUTH_PAGES = ['/auth/login', '/auth/register', '/', '/test-agent'];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -23,7 +23,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const isAuthPage = AUTH_PAGES.includes(pathname) || pathname.startsWith('/auth/') || pathname.startsWith('/widget');
 
-  if (isAuthPage) {
+  // If there's no admin token, don't show the admin shell (visitors on /test-agent will only see the page)
+  const token = localStorage.getItem('token');
+  if (isAuthPage || !token) {
     return <>{children}</>;
   }
 

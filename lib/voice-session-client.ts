@@ -123,7 +123,8 @@ export class ReconnectingVoiceSession {
 
       // Clean close (server shutdown, ended) — also stay closed.
       // Code 1013 = "Try Again Later" (server busy) — don't hammer the server.
-      if (event.code === 1000 || event.code === 1013) {
+      // Code 4500 = init error (bad token, agent not found) — retrying won't help.
+      if (event.code === 1000 || event.code === 1013 || event.code === 4500) {
         this.opts.onClose?.(event)
         return
       }

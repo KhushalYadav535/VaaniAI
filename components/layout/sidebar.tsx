@@ -38,6 +38,7 @@ const customerNavigation = [
   { name: 'Agents', href: '/agents', icon: Zap },
   { name: 'Agent Templates', href: '/agent-templates', icon: LibraryBig },
   { name: 'CRM & Leads', href: '/crm', icon: Users },
+  { name: 'Visitors', href: '/visitors', icon: Users },
   { name: 'Call Flows', href: '/call-flows', icon: GitBranch },
   { name: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen },
   { name: 'Campaigns', href: '/campaigns', icon: Megaphone },

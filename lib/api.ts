@@ -63,6 +63,24 @@ export const authApi = {
     apiRequest('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
 };
 
+// ─── Visitors ────────────────────────────────────────────────────────────────
+
+export const visitorsApi = {
+  sendOtp: (email: string) =>
+    apiRequest('/visitors/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  verifyOtp: (email: string, otp: string) =>
+    apiRequest('/visitors/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    }),
+
+  getAll: () => apiRequest('/visitors'),
+};
+
 // ─── Agents ──────────────────────────────────────────────────────────────────
 
 export const agentsApi = {
@@ -86,6 +104,12 @@ export const agentsApi = {
     apiRequest(`/agents/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+    }),
+
+  togglePublic: (id: string, isPublic: boolean) =>
+    apiRequest(`/agents/${id}/public`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublic }),
     }),
 
   duplicate: (id: string) =>

@@ -149,14 +149,8 @@ export default function LoginPage() {
 
               <div className="mt-6 text-center">
                 <span className="text-slate-500 dark:text-slate-400 font-light text-sm">
-                  Don&apos;t have an account?{' '}
+                  Admin portal for Vocred. Authorized access only.
                 </span>
-                <Link
-                  href="/auth/register"
-                  className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-light text-sm transition-colors"
-                >
-                  Create account
-                </Link>
               </div>
             </div>
           </div>

@@ -85,7 +85,8 @@ export default function TestAgentPage() {
 
   useEffect(() => {
     const token = localStorage.getItem('token')
-    if (!token) { router.push('/auth/login'); return }
+    const visitorToken = localStorage.getItem('visitorToken')
+    if (!token && !visitorToken) { router.push('/auth/login'); return }
     const params = new URLSearchParams(window.location.search)
     const agentIdFromUrl = params.get('agentId')
     if (agentIdFromUrl) setSelectedAgentId(agentIdFromUrl)
@@ -111,7 +112,18 @@ export default function TestAgentPage() {
 
   const loadAgents = async () => {
     try {
-      const data: any = await agentsApi.getAll({ status: 'active' })
+      const token = localStorage.getItem('token')
+      let data: any
+      if (token) {
+        data = await agentsApi.getAll({ status: 'active' })
+      } else {
+        // Visitor fetching public active agents
+        const visitorToken = localStorage.getItem('visitorToken')
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/public/agents`, {
+          headers: { 'Authorization': `Bearer ${visitorToken}` }
+        })
+        data = await res.json()
+      }
       setAgents(data.agents || [])
     } catch { setAgents([]) }
   }
@@ -137,7 +149,7 @@ export default function TestAgentPage() {
       onPlaybackEnd: () => { isPlayingRef.current = false; isAgentSpeakingRef.current = false; micStreamerRef.current?.setAgentSpeaking(false); setStatus('listening'); if (isSimulating) processNextScriptLine() },
     })
     await audioPlayerRef.current.start()
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('token') || localStorage.getItem('visitorToken')
     if (!token) { router.push('/auth/login'); return }
     const ws = new ReconnectingVoiceSession({
       wsUrl: WS_URL, agentId: selectedAgentId, token,

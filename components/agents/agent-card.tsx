@@ -58,6 +58,7 @@ function getColorForAgent(name: string) {
 export function AgentCard({ agent, onDelete, onRefresh, viewMode = 'grid' }: AgentCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isTogglingStatus, setIsTogglingStatus] = useState(false)
+  const [isTogglingPublic, setIsTogglingPublic] = useState(false)
   const [isDuplicating, setIsDuplicating] = useState(false)
 
   const avatarGradient = getColorForAgent(agent.name)
@@ -68,12 +69,25 @@ export function AgentCard({ agent, onDelete, onRefresh, viewMode = 'grid' }: Age
     setIsTogglingStatus(true)
     try {
       const { agentsApi } = await import('@/lib/api')
-      await agentsApi.toggleStatus(agent._id, agent.status === 'active' ? 'inactive' : 'active')
+      await agentsApi.toggleStatus(agent._id!, agent.status === 'active' ? 'inactive' : 'active')
       onRefresh()
     } catch (e) {
       console.error(e)
     } finally {
       setIsTogglingStatus(false)
+    }
+  }
+
+  const handleTogglePublic = async () => {
+    setIsTogglingPublic(true)
+    try {
+      const { agentsApi } = await import('@/lib/api')
+      await agentsApi.togglePublic(agent._id!, agent.isPublic ? false : true)
+      onRefresh()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setIsTogglingPublic(false)
     }
   }
 
@@ -149,6 +163,10 @@ export function AgentCard({ agent, onDelete, onRefresh, viewMode = 'grid' }: Age
                 <DropdownMenuItem onClick={handleToggleStatus} disabled={isTogglingStatus} className="text-slate-700 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800 rounded-lg">
                   {agent.status === 'active' ? <ToggleLeft size={14} className="mr-2" /> : <ToggleRight size={14} className="mr-2" />}
                   {agent.status === 'active' ? 'Deactivate' : 'Activate'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleTogglePublic} disabled={isTogglingPublic} className="text-slate-700 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800 rounded-lg">
+                  {agent.isPublic ? <ToggleLeft size={14} className="mr-2 text-slate-400" /> : <ToggleRight size={14} className="mr-2 text-purple-500" />}
+                  {isTogglingPublic ? 'Updating…' : agent.isPublic ? 'Hide from Visitors' : 'Show to Visitors'}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-slate-200/50 dark:bg-slate-800/50" />
                 <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-500/10 rounded-lg">
@@ -265,6 +283,12 @@ export function AgentCard({ agent, onDelete, onRefresh, viewMode = 'grid' }: Age
                     ? <ToggleLeft size={14} className="mr-2 text-slate-400" />
                     : <ToggleRight size={14} className="mr-2 text-emerald-500" />}
                   {isTogglingStatus ? 'Updating…' : agent.status === 'active' ? 'Deactivate' : 'Activate'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleTogglePublic} disabled={isTogglingPublic} className="text-slate-700 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800 rounded-xl mx-1 my-0.5">
+                  {agent.isPublic
+                    ? <ToggleLeft size={14} className="mr-2 text-slate-400" />
+                    : <ToggleRight size={14} className="mr-2 text-purple-500" />}
+                  {isTogglingPublic ? 'Updating…' : agent.isPublic ? 'Hide from Visitors' : 'Show to Visitors'}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => window.location.href = `/logs?agentId=${agent._id}`} className="text-slate-700 dark:text-slate-200 focus:bg-slate-100 dark:focus:bg-slate-800 rounded-xl mx-1 my-0.5">
                   <ExternalLink size={14} className="mr-2 text-slate-400" /> View Logs

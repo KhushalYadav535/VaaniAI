@@ -16,6 +16,7 @@ export interface Agent {
   temperature: number
   maxDuration: number
   status: 'active' | 'inactive'
+  isPublic?: boolean
   createdAt: Date
   callsCount: number
   totalMinutes: number
